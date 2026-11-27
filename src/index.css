@@ -1,0 +1,277 @@
+@import "tailwindcss";
+@import "katex/dist/katex.min.css";
+
+@layer base {
+  :root {
+    --font-display: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+    --font-sans: "DM Sans", system-ui, -apple-system, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+
+    /* 0580 Blue Theme (Default) */
+    --sk-page: #ffffff;
+    --sk-surface: #f5f9ff;
+    --sk-chip: #eef4ff;
+    --sk-ink: #0f2557;
+    --sk-ink-hover: #173473;
+    --sk-body: #1e3a7a;
+    --sk-dim: #476299;
+    --sk-mute: #6b84b8;
+    --sk-line: #cfe0fc;
+    --sk-soft: #93c5fd;
+    --sk-pri: #2563eb;
+    --sk-pri-hover: #1d4ed8;
+    --sk-pri-bright: #60a5fa;
+    --sk-acc: #0284c7;
+    --sk-acc-ink: #0369a1;
+    --sk-acc-soft: #e0f2fe;
+    --sk-acc-line: #7dd3fc;
+    --sk-ring: rgba(37, 99, 235, 0.18);
+    --sk-track: #cbd5e1;
+  }
+
+  [data-subject="0606"] {
+    /* 0606 Additional Mathematics Red / Crimson Theme */
+    --sk-page: #ffffff;
+    --sk-surface: #fff7f7;
+    --sk-chip: #fef2f2;
+    --sk-ink: #5c0f14;
+    --sk-ink-hover: #78141b;
+    --sk-body: #7f1d1d;
+    --sk-dim: #993b3b;
+    --sk-mute: #b86565;
+    --sk-line: #fecaca;
+    --sk-soft: #fca5a5;
+    --sk-pri: #dc2626;
+    --sk-pri-hover: #b91c1c;
+    --sk-pri-bright: #f87171;
+    --sk-acc: #e11d48;
+    --sk-acc-ink: #be123c;
+    --sk-acc-soft: #fff1f2;
+    --sk-acc-line: #fda4af;
+    --sk-ring: rgba(220, 38, 38, 0.18);
+    --sk-track: #e2c8c8;
+  }
+
+  html {
+    font-family: var(--font-sans);
+    background-color: var(--sk-page);
+    color: var(--sk-ink);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, h4, .font-display {
+    font-family: var(--font-display);
+  }
+
+  .font-mono {
+    font-family: var(--font-mono);
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Sakuga Tactile Surfaces & Controls */
+.sk-card {
+  background-color: var(--sk-page);
+  border: 1.5px solid var(--sk-line);
+  border-radius: 18px;
+}
+
+.sk-card-soft {
+  background-color: var(--sk-chip);
+  border: 1.5px solid var(--sk-line);
+  border-radius: 14px;
+}
+
+.sk-card-accent {
+  background-color: var(--sk-chip);
+  border: 2px solid var(--sk-ink);
+  border-radius: 18px;
+  box-shadow: 4px 5px 0 var(--sk-soft);
+}
+
+.sk-btn-primary {
+  background-color: var(--sk-pri);
+  color: #ffffff;
+  border: 2px solid var(--sk-ink);
+  border-radius: 12px;
+  box-shadow: 3px 4px 0 var(--sk-soft);
+  transition: transform 160ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 160ms ease,
+    background-color 140ms ease;
+}
+
+.sk-btn-primary:hover:not(:disabled) {
+  background-color: var(--sk-pri-hover);
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 5px 0 var(--sk-soft);
+}
+
+.sk-btn-primary:active:not(:disabled) {
+  transform: translate(2px, 3px);
+  box-shadow: 1px 1px 0 var(--sk-soft);
+}
+
+.sk-btn-ink {
+  background-color: var(--sk-ink);
+  color: #ffffff;
+  border: 2px solid var(--sk-ink);
+  border-radius: 12px;
+  box-shadow: 3px 4px 0 var(--sk-soft);
+  transition: transform 160ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 160ms ease,
+    background-color 140ms ease;
+}
+
+.sk-btn-ink:hover:not(:disabled) {
+  background-color: var(--sk-ink-hover);
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 5px 0 var(--sk-soft);
+}
+
+.sk-btn-ink:active:not(:disabled) {
+  transform: translate(2px, 3px);
+  box-shadow: 1px 1px 0 var(--sk-soft);
+}
+
+.sk-btn-secondary {
+  background-color: var(--sk-page);
+  color: var(--sk-ink);
+  border: 2px solid var(--sk-ink);
+  border-radius: 12px;
+  box-shadow: 3px 3px 0 var(--sk-soft);
+  transition: transform 160ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 160ms ease,
+    background-color 140ms ease;
+}
+
+.sk-btn-secondary:hover:not(:disabled) {
+  background-color: var(--sk-chip);
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--sk-soft);
+}
+
+.sk-btn-secondary:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--sk-soft);
+}
+
+.sk-btn-subtle {
+  background-color: var(--sk-page);
+  color: var(--sk-ink);
+  border: 1.5px solid var(--sk-line);
+  border-radius: 11px;
+  transition: border-color 140ms ease, background-color 140ms ease, transform 140ms ease;
+}
+
+.sk-btn-subtle:hover:not(:disabled) {
+  background-color: var(--sk-chip);
+  border-color: var(--sk-ink);
+}
+
+.sk-btn-subtle:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/* Connected Sakuga Tab Bar */
+.sk-tabs {
+  background-color: var(--sk-chip);
+  border: 2px solid var(--sk-ink);
+  border-radius: 13px;
+  box-shadow: 3px 3px 0 var(--sk-soft);
+  padding: 4px;
+  gap: 4px;
+}
+
+.sk-tab {
+  border-radius: 9px;
+  color: var(--sk-dim);
+  border: 1.5px solid transparent;
+  transition: background-color 150ms ease, color 150ms ease,
+    transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 150ms ease, border-color 150ms ease;
+}
+
+.sk-tab:hover:not([data-active="true"]) {
+  color: var(--sk-ink);
+  background-color: rgba(255, 255, 255, 0.72);
+}
+
+.sk-tab[data-active="true"] {
+  background-color: #ffffff;
+  color: var(--sk-ink);
+  border-color: var(--sk-ink);
+  transform: translateY(-2px);
+  box-shadow: 0 2px 0 var(--sk-soft);
+}
+
+/* Sakuga Progress Track & Fill */
+.sk-progress-track {
+  background-color: var(--sk-chip);
+  border: 2px solid var(--sk-ink);
+  border-radius: 999px;
+  box-shadow: 2px 2px 0 var(--sk-soft);
+  overflow: hidden;
+}
+
+.sk-progress-fill {
+  background: linear-gradient(90deg, var(--sk-pri-bright) 0%, var(--sk-acc) 100%);
+  transition: width 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Sakuga Inputs (white field, ink outline, subject-themed offset shadow) */
+.sk-input,
+.sk-input-shell {
+  background-color: #ffffff;
+  border: 2px solid var(--sk-ink);
+  border-radius: 12px;
+  color: var(--sk-ink);
+  box-shadow: 3px 3px 0 var(--sk-soft);
+  transition: border-color 150ms ease, background-color 150ms ease,
+    box-shadow 150ms ease, transform 160ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.sk-input::placeholder {
+  color: var(--sk-dim);
+  opacity: 0.72;
+}
+
+.sk-input:focus,
+.sk-input-shell:focus-within {
+  outline: none;
+  background-color: #ffffff;
+  border-color: var(--sk-ink);
+  box-shadow: 4px 4px 0 var(--sk-soft), 0 0 0 3px var(--sk-ring);
+}
+
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.5rem 0;
+  margin: 0.75rem 0;
+}
+
+.pdf-annotator-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.pdf-annotator-scroll::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sk-btn-primary,
+  .sk-btn-ink,
+  .sk-btn-secondary,
+  .sk-btn-subtle,
+  .sk-tab,
+  .sk-progress-fill {
+    transition: none;
+    transform: none;
+  }
+}
