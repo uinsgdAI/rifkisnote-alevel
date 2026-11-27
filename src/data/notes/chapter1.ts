@@ -23,7 +23,7 @@ export const CHAPTER_1_NOTES: SubtopicNote[] = [
         heading: 'Key number families',
         body: 'Cambridge Paper 1 and Paper 2 regularly open with a list of numbers from which you must pick specific types.',
         bullets: [
-          'Natural numbers: whole counting numbers from $1$ upwards ($1, 2, 3, \\dots$); in Morrison & Hamshaw’s Cambridge Coursebook, $0$ is included in integers ($\\dots, -2, -1, 0, 1, 2, \\dots$) and excluded from natural numbers and prime numbers.',
+          'Natural numbers: whole counting numbers from $1$ upwards ($1, 2, 3, \\dots$); in the Cambridge syllabus, $0$ is included in integers ($\\dots, -2, -1, 0, 1, 2, \\dots$) and excluded from natural numbers and prime numbers.',
           'Prime numbers: integers greater than $1$ with exactly two factors ($2, 3, 5, 7, 11, 13, 17, 19, \\dots$). Note that $1$ is NOT prime and $2$ is the only even prime.',
           'Square numbers: $1, 4, 9, 16, 25, 36, 49, 64, 81, 100, 121, 144, 169, 196, 225$.',
           'Cube numbers: $1, 8, 27, 64, 125, 216, 343, 512, 729, 1000$.',
@@ -466,7 +466,7 @@ export const CHAPTER_1_NOTES: SubtopicNote[] = [
     studyNotes: [
       {
         heading: 'Decimal places, significant figures & 1 s.f. estimation (Coursebook 1.7 & 5.6)',
-        body: 'In Morrison & Hamshaw (Ch. 1.7 Rounding numbers), look at the digit to the right of your target place: round up if it is $5$ or greater, and leave unchanged if it is less than $5$. For significant figures, start counting from the FIRST non-zero digit reading left to right (every zero after that first non-zero digit counts; trailing zeros keep place value when rounding whole numbers). When estimating (Ch. 5.6), round every number to $1$ significant figure FIRST before computing—never round an exact answer at the end.',
+        body: 'When rounding numbers (Ch. 1.7), look at the digit to the right of your target place: round up if it is $5$ or greater, and leave unchanged if it is less than $5$. For significant figures, start counting from the FIRST non-zero digit reading left to right (every zero after that first non-zero digit counts; trailing zeros keep place value when rounding whole numbers). When estimating (Ch. 5.6), round every number to $1$ significant figure FIRST before computing—never round an exact answer at the end.',
       },
     ],
     workedExamples: [

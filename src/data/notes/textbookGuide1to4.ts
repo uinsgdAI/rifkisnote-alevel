@@ -31,7 +31,7 @@ export const TEXTBOOK_GUIDE_1_TO_4: Record<string, TextbookEnrichment> = {
     extraStudyNotes: [
       {
         heading: 'Using Prime Factors to Test for Square & Cube Numbers (Coursebook Ch. 1.3–1.4 Method)',
-        body: 'In Morrison & Hamshaw’s Cambridge Coursebook exercises, you are often asked for the smallest positive integer $k$ that makes $N \\times k$ a perfect square or perfect cube. A number is a perfect square if and only if EVERY exponent in its prime factorisation is even (multiples of $2$); it is a perfect cube if and only if EVERY exponent is a multiple of $3$. Multiply by the missing prime factors needed to bump incomplete exponents up to the next multiple of $2$ or $3$.',
+        body: 'In Cambridge IGCSE Coursebook exercises, you are often asked for the smallest positive integer $k$ that makes $N \\times k$ a perfect square or perfect cube. A number is a perfect square if and only if EVERY exponent in its prime factorisation is even (multiples of $2$); it is a perfect cube if and only if EVERY exponent is a multiple of $3$. Multiply by the missing prime factors needed to bump incomplete exponents up to the next multiple of $2$ or $3$.',
       },
     ],
     extraWorkedExamples: [

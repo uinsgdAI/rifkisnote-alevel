@@ -284,7 +284,7 @@ test('All 9 chapters and 72 syllabus subtopics of 0580 have complete, honest stu
     }
   }
 
-  // Verify no fabricated paper code on Topic 1.1 and Morrison & Hamshaw textbook alignment details
+  // Verify no fabricated paper code on Topic 1.1 and coursebook alignment details
   const t11 = ALL_SUBTOPICS_0580.find((t) => t.id === '1.1');
   assert.ok(t11);
   assert.equal(t11.quickCheck.paperCode, undefined);

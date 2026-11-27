@@ -40,7 +40,7 @@ export type SandboxType =
   | 'none';
 
 export interface CoursebookRef {
-  unit: number; // Units 1–6 in Morrison & Hamshaw (2nd Ed.)
+  unit: number; // Units 1–6 in Cambridge Coursebook
   unitTitle: string; // e.g. 'Unit 1: Number'
   chapter: number; // Chapters 1–24
   chapterTitle: string; // Exact Coursebook chapter title

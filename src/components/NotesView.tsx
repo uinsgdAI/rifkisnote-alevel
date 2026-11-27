@@ -232,7 +232,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
               {note.coursebookRef && (
                 <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--sk-dim)]">
                   <span className="font-semibold text-[var(--sk-ink)]">
-                    Morrison &amp; Hamshaw Coursebook (2nd Ed.)
+                    Cambridge IGCSE Coursebook
                   </span>
                   <span aria-hidden="true">·</span>
                   <span>
@@ -419,7 +419,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                 <div className="text-xs font-bold text-[var(--sk-acc-ink)]">
                   {subject === '0606'
                     ? 'Exam Tip · Additional Mathematics (0606)'
-                    : 'Coursebook Tip · Morrison & Hamshaw'}
+                    : 'Coursebook Tip'}
                 </div>
                 <p className="text-sm text-[var(--sk-body)] leading-relaxed">
                   <MathText text={note.coursebookTip} />
