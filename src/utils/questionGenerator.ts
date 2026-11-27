@@ -1,11 +1,9 @@
 import type { PracticeQuestion } from '../types/syllabus';
 
 export type MockPaperMode =
-  | 'mock-core-p1'
-  | 'mock-core-p3'
-  | 'mock-ext-p2'
-  | 'mock-ext-p4'
-  | 'mock-full'
+  | 'mock-p1-full'
+  | 'mock-p1-algebra'
+  | 'mock-p1-calculus'
   | 'topical';
 
 export interface MockGenerationOptions {
@@ -70,10 +68,23 @@ function gcd(a: number, b: number): number {
 }
 
 function formatFraction(num: number, den: number): string {
+  if (den < 0) {
+    num = -num;
+    den = -den;
+  }
   const g = gcd(num, den);
   const n = num / g;
   const d = den / g;
   return d === 1 ? String(n) : `${n}/${d}`;
+}
+
+function comb(n: number, r: number): number {
+  if (r < 0 || r > n) return 0;
+  let res = 1;
+  for (let i = 1; i <= r; i += 1) {
+    res = (res * (n - i + 1)) / i;
+  }
+  return Math.round(res);
 }
 
 function buildUniqueMcqOptions(
@@ -90,11 +101,19 @@ function buildUniqueMcqOptions(
   }
   let guard = 1;
   while (unique.length < 4) {
-    const fallback = `${correct} + ${guard}`;
+    const fallback = `${correct} (${guard})`;
     if (!unique.includes(fallback)) unique.push(fallback);
     guard += 1;
   }
   return shuffle(rng, unique);
+}
+
+function fmtSigned(coeff: number, variable = ''): string {
+  if (coeff === 0) return '';
+  const sign = coeff >= 0 ? '+' : '-';
+  const absVal = Math.abs(coeff);
+  const mag = absVal === 1 && variable ? '' : String(absVal);
+  return `${sign} ${mag}${variable}`;
 }
 
 interface GeneratedTemplateItem {
@@ -108,1376 +127,910 @@ interface TemplateDef {
   key: string;
   chapterId: number;
   topicId: string;
-  tier: 'Core' | 'Extended';
-  paperType: 'Non-Calculator' | 'Calculator';
+  group: 'algebra' | 'calculus';
+  isMcq?: boolean;
   build: TemplateFn;
 }
 
 const TEMPLATES: TemplateDef[] = [
-  // 1.1 Types of Number (MCQ - Core Non-Calc)
+  // 1.1 Completing the square & minimum/maximum value
   {
-    key: 'ch1-hcf-lcm-mcq',
+    key: 'ch1-complete-square-vertex',
     chapterId: 1,
     topicId: '1.1',
-    tier: 'Core',
-    paperType: 'Non-Calculator',
+    group: 'algebra',
     build: (rng, idSuffix) => {
-      const mode = rng() < 0.5 ? 'HCF' : 'LCM';
-      const basePairs: Array<[number, number, number, number]> = [
-        [2, 3, 5, 7],
-        [2, 3, 5, 11],
-        [2, 5, 3, 7],
-        [3, 5, 2, 7],
-        [2, 3, 7, 5],
-      ];
-      const [p, q, r, s] = pick(rng, basePairs);
-      const aExp = randInt(rng, 1, 2);
-      const bExp = randInt(rng, 1, 2);
-      const num1 = p ** aExp * q * r;
-      const num2 = p * q ** bExp * s;
-      const hcf = gcd(num1, num2);
-      const lcm = (num1 * num2) / hcf;
-      const ans = mode === 'HCF' ? hcf : lcm;
-      const distractors =
-        mode === 'HCF'
-          ? [String(p * q * r), String(hcf * 2), String(p), String(hcf * q)]
-          : [String(hcf), String(num1 * num2), String(lcm / p), String(lcm * 2)];
-      const options = buildUniqueMcqOptions(rng, String(ans), distractors);
-
+      const a = pick(rng, [1, 2, 3]);
+      const p = pick(rng, [-4, -3, -2, 2, 3, 4]);
+      const q = pick(rng, [-7, -5, -3, 1, 4, 7]);
+      const b = -2 * a * p;
+      const c = a * p * p + q;
+      const expr = `${a === 1 ? '' : a}x^2 ${fmtSigned(b, 'x')} ${fmtSigned(c)}`.trim();
       return {
-        signature: `1.1-hcflcm:${mode}:${num1}:${num2}`,
+        signature: `1.1-min:${a}:${p}:${q}`,
         question: {
           id: `gen-1.1-${idSuffix}`,
           chapterId: 1,
           topicId: '1.1',
-          topicTitle: 'Types of number',
-          tier: 'Core',
-          paperType: 'Non-Calculator',
-          marks: 2,
-          sourceRef: 'Paper 1 Non-Calc · Topic 1.1',
-          question: `What is the ${
-            mode === 'HCF' ? 'Highest Common Factor (HCF)' : 'Lowest Common Multiple (LCM)'
-          } of $${num1}$ and $${num2}$?`,
-          questionType: 'mcq',
-          options,
-          correctAnswer: String(ans),
-          markScheme: [
-            { code: 'M1', detail: `Prime factorise $${num1}$ and $${num2}$` },
-            { code: 'A1', detail: `${mode} $= ${ans}$` },
-          ],
-          fullSolution: `Factorising gives $${num1}$ and $${num2}$. Taking ${
-            mode === 'HCF'
-              ? `the lowest power of common primes gives HCF $= ${ans}$.`
-              : `the highest power of every prime appearing gives LCM $= ${ans}$.`
-          }`,
-        },
-      };
-    },
-  },
-
-  // 1.1 Prime vs Cube/Square number (MCQ - Core Non-Calc)
-  {
-    key: 'ch1-number-class-mcq',
-    chapterId: 1,
-    topicId: '1.1',
-    tier: 'Core',
-    paperType: 'Non-Calculator',
-    build: (rng, idSuffix) => {
-      const targetKind = pick(rng, ['prime', 'cube', 'irrational'] as const);
-      if (targetKind === 'prime') {
-        const prime = pick(rng, [29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73]);
-        const comps = shuffle(rng, [27, 33, 39, 49, 51, 57, 63, 69, 77, 81, 87, 91]).slice(0, 3);
-        const options = shuffle(rng, [String(prime), ...comps.map(String)]);
-        return {
-          signature: `1.1-prime:${prime}:${comps.join(',')}`,
-          question: {
-            id: `gen-1.1p-${idSuffix}`,
-            chapterId: 1,
-            topicId: '1.1',
-            topicTitle: 'Types of number',
-            tier: 'Core',
-            paperType: 'Non-Calculator',
-            marks: 1,
-            sourceRef: 'Paper 1 Non-Calc · Topic 1.1',
-            question: 'Which number in the list below is a prime number?',
-            questionType: 'mcq',
-            options,
-            correctAnswer: String(prime),
-            markScheme: [{ code: 'B1', detail: `$${prime}$ has exactly two factors: $1$ and $${prime}$` }],
-            fullSolution: `Only $${prime}$ has no divisors other than $1$ and itself; the others factorise into smaller primes.`,
-          },
-        };
-      }
-      if (targetKind === 'cube') {
-        const n = pick(rng, [3, 4, 5, 6, 7]);
-        const cube = n ** 3;
-        const fakes = shuffle(rng, [cube - 4, cube + 5, n * n + 2, n * 10]).slice(0, 3);
-        const options = shuffle(rng, [String(cube), ...fakes.map(String)]);
-        return {
-          signature: `1.1-cube:${cube}:${fakes.join(',')}`,
-          question: {
-            id: `gen-1.1c-${idSuffix}`,
-            chapterId: 1,
-            topicId: '1.1',
-            topicTitle: 'Types of number',
-            tier: 'Core',
-            paperType: 'Non-Calculator',
-            marks: 1,
-            sourceRef: 'Paper 1 Non-Calc · Topic 1.1',
-            question: 'Which of these integers is a cube number?',
-            questionType: 'mcq',
-            options,
-            correctAnswer: String(cube),
-            markScheme: [{ code: 'B1', detail: `$${n}^3 = ${cube}$` }],
-            fullSolution: `$${n} \\times ${n} \\times ${n} = ${cube}$, so $${cube}$ is the cube number.`,
-          },
-        };
-      }
-
-      const irrPool = ['\\sqrt{7}', '\\sqrt{11}', '\\sqrt{13}', '\\sqrt{19}', '\\pi'];
-      const ratPool = ['\\sqrt{49}', '\\frac{22}{7}', '0.\\dot{3}', '\\sqrt{81}', '3.14'];
-      const correctIrr = pick(rng, irrPool);
-      const chosenRats = shuffle(rng, ratPool).slice(0, 3);
-      const ans = `$${correctIrr}$`;
-      const options = shuffle(rng, [ans, ...chosenRats.map((r) => `$${r}$`)]);
-      return {
-        signature: `1.1-irr:${correctIrr}:${chosenRats.join(',')}`,
-        question: {
-          id: `gen-1.1i-${idSuffix}`,
-          chapterId: 1,
-          topicId: '1.1',
-          topicTitle: 'Types of number',
-          tier: 'Core',
-          paperType: 'Non-Calculator',
-          marks: 1,
-          sourceRef: 'Paper 1 Non-Calc · Topic 1.1',
-          question: 'Which value is an irrational number?',
-          questionType: 'mcq',
-          options,
-          correctAnswer: ans,
-          markScheme: [{ code: 'B1', detail: `${ans} cannot be written as an exact fraction $\\frac{p}{q}$` }],
-          fullSolution: `${ans} has a non-terminating, non-recurring decimal expansion, whereas all other choices simplify to exact fractions.`,
-        },
-      };
-    },
-  },
-
-  // 1.7 Indices (Text fraction - Extended Non-Calc)
-  {
-    key: 'ch1-indices-text',
-    chapterId: 1,
-    topicId: '1.7',
-    tier: 'Extended',
-    paperType: 'Non-Calculator',
-    build: (rng, idSuffix) => {
-      const cases = [
-        { base: 64, numExp: -2, denExp: 3, root: 4, pow: 16, ans: '1/16', dec: 1 / 16 },
-        { base: 27, numExp: -2, denExp: 3, root: 3, pow: 9, ans: '1/9', dec: 1 / 9 },
-        { base: 16, numExp: -3, denExp: 4, root: 2, pow: 8, ans: '1/8', dec: 1 / 8 },
-        { base: 8, numExp: -2, denExp: 3, root: 2, pow: 4, ans: '1/4', dec: 0.25 },
-        { base: 32, numExp: -2, denExp: 5, root: 2, pow: 4, ans: '1/4', dec: 0.25 },
-        { base: 125, numExp: -2, denExp: 3, root: 5, pow: 25, ans: '1/25', dec: 0.04 },
-        { base: 81, numExp: -3, denExp: 4, root: 3, pow: 27, ans: '1/27', dec: 1 / 27 },
-      ];
-      const item = pick(rng, cases);
-      return {
-        signature: `1.7-ind:${item.base}:${item.numExp}/${item.denExp}`,
-        question: {
-          id: `gen-1.7-${idSuffix}`,
-          chapterId: 1,
-          topicId: '1.7',
-          topicTitle: 'Indices I',
-          tier: 'Extended',
-          paperType: 'Non-Calculator',
-          marks: 2,
-          sourceRef: 'Paper 2 Non-Calc · Topic 1.7',
-          question: `Work out the exact value of $${item.base}^{\\frac{${item.numExp}}{${item.denExp}}}$ as a simplified fraction (type as a/b).`,
-          questionType: 'text',
-          correctAnswer: item.ans,
-          acceptedAnswers: [item.ans],
-          numericAnswer: item.dec,
-          tolerance: 0.0005,
-          markScheme: [
-            { code: 'M1', detail: `$\\sqrt[${item.denExp}]{${item.base}} = ${item.root}$ and $${item.root}^{${Math.abs(item.numExp)}} = ${item.pow}$` },
-            { code: 'A1', detail: `$\\frac{1}{${item.pow}}$` },
-          ],
-          fullSolution: `Take the $${item.denExp}$th root of $${item.base}$ to get $${item.root}$. Raise to power $${Math.abs(item.numExp)}$ to get $${item.pow}$, then apply the negative reciprocal: $\\frac{1}{${item.pow}}$.`,
-        },
-      };
-    },
-  },
-
-  // 1.18 Surds (Numeric - Extended Non-Calc)
-  {
-    key: 'ch1-surds-num',
-    chapterId: 1,
-    topicId: '1.18',
-    tier: 'Extended',
-    paperType: 'Non-Calculator',
-    build: (rng, idSuffix) => {
-      const prime = pick(rng, [2, 3, 5, 7]);
-      const p = randInt(rng, 2, 5);
-      const q = randInt(rng, 2, 4);
-      const top = prime * p;
-      const inside = q * q * prime;
-      const ans = p + q;
-      return {
-        signature: `1.18-surds:${prime}:${p}:${q}`,
-        question: {
-          id: `gen-1.18-${idSuffix}`,
-          chapterId: 1,
-          topicId: '1.18',
-          topicTitle: 'Surds',
-          tier: 'Extended',
-          paperType: 'Non-Calculator',
+          topicTitle: 'Completing the Square & Quadratic Forms',
+          paperModule: 'P1',
+          paperType: 'Pure Mathematics 1',
           marks: 3,
-          sourceRef: 'Paper 2 Non-Calc · Topic 1.18',
-          question: `Simplify $\\frac{${top}}{\\sqrt{${prime}}} + \\sqrt{${inside}}$ into the form $k\\sqrt{${prime}}$. Enter the integer value of $k$.`,
+          sourceRef: '9709 P1 Syllabus 1.1',
+          question: `Express $${expr}$ in the form $a(x - p)^2 + q$, and state the minimum value of the expression.`,
           questionType: 'numeric',
-          correctAnswer: String(ans),
-          numericAnswer: ans,
+          correctAnswer: String(q),
+          acceptedAnswers: [String(q)],
+          numericAnswer: q,
           tolerance: 0,
           markScheme: [
-            { code: 'M1', detail: `$\\frac{${top}\\sqrt{${prime}}}{${prime}} = ${p}\\sqrt{${prime}}$` },
-            { code: 'B1', detail: `$\\sqrt{${inside}} = ${q}\\sqrt{${prime}}$` },
-            { code: 'A1', detail: `$${ans}\\sqrt{${prime}} \\implies k = ${ans}$` },
+            { code: 'M1', detail: `Factor out $${a}$ from the $x^2$ and $x$ terms and halve the $x$ coefficient` },
+            { code: 'A1', detail: `Completed square $${a === 1 ? '' : a}(x ${fmtSigned(-p)})^2 ${fmtSigned(q)}$` },
+            { code: 'A1', detail: `Minimum value $= ${q}$ (at $x = ${p}$)` },
           ],
-          fullSolution: `Rationalise $\\frac{${top}}{\\sqrt{${prime}}}$ by multiplying top and bottom by $\\sqrt{${prime}}$ to obtain $${p}\\sqrt{${prime}}$. Simplify $\\sqrt{${inside}} = ${q}\\sqrt{${prime}}$. Add them: $${ans}\\sqrt{${prime}}$.`,
+          fullSolution: `$${expr} = ${a}(x^2 ${fmtSigned(b / a, 'x')}) ${fmtSigned(c)} = ${a === 1 ? '' : a}(x ${fmtSigned(-p)})^2 ${fmtSigned(q)}$. Since $(x ${fmtSigned(-p)})^2 \\ge 0$, the minimum value is $${q}$.`,
         },
       };
     },
   },
-
-  // 1.16 Money commission (Numeric - Core Non-Calc)
+  // 1.2 Discriminant & tangent line
   {
-    key: 'ch1-money-commission',
+    key: 'ch1-discriminant-tangent',
     chapterId: 1,
-    topicId: '1.16',
-    tier: 'Core',
-    paperType: 'Non-Calculator',
+    topicId: '1.2',
+    group: 'algebra',
     build: (rng, idSuffix) => {
-      const dollars = pick(rng, [400, 600, 800, 1000, 1200]);
-      const commPct = pick(rng, [2, 2.5, 5]);
-      const rate = pick(rng, [120, 140, 150, 160]);
-      const netDollars = dollars * (1 - commPct / 100);
-      const yen = Math.round(netDollars * rate);
+      const m = pick(rng, [2, 4, 6]);
+      const b = pick(rng, [-4, -2, 2, 4]);
+      // Curve y = x^2 + bx + c_0, line y = mx + k. Tangency: x^2 + (b - m)x + (c_0 - k) = 0
+      // Make (b - m) even so k is clean integer! Ensure (b - m) is even: b and m are both even here.
+      const c0 = randInt(rng, 4, 12);
+      const diff = b - m;
+      const k = c0 - (diff * diff) / 4;
+      const curveExpr = `x^2 ${fmtSigned(b, 'x')} + ${c0}`;
+      const lineExpr = `${m}x + k`;
       return {
-        signature: `1.16-comm:${dollars}:${commPct}:${rate}`,
+        signature: `1.2-disc:${b}:${c0}:${m}`,
         question: {
-          id: `gen-1.16c-${idSuffix}`,
+          id: `gen-1.2-${idSuffix}`,
           chapterId: 1,
-          topicId: '1.16',
-          topicTitle: 'Money',
-          tier: 'Core',
-          paperType: 'Non-Calculator',
-          marks: 2,
-          sourceRef: 'Paper 1 Non-Calc · Topic 1.16',
-          question: `A currency exchange changes $\\$${dollars}$ into Japanese Yen at a rate of $\\$1 = ${rate}\\text{ JPY}$, after charging a $${commPct}\\%$ commission on the dollars. How many Yen does the customer receive?`,
-          questionType: 'numeric',
-          correctAnswer: String(yen),
-          numericAnswer: yen,
-          tolerance: 1,
-          unit: 'JPY',
-          markScheme: [
-            { code: 'M1', detail: `Remaining dollars $= ${dollars} \\times ${1 - commPct / 100} = \\$${netDollars}$` },
-            { code: 'A1', detail: `$${netDollars} \\times ${rate} = ${yen}\\text{ JPY}$` },
-          ],
-          fullSolution: `Subtract $${commPct}\\%$ commission: $\\$${dollars} \\times ${(1 - commPct / 100).toFixed(3).replace(/0+$/, '')} = \\$${netDollars}$. Convert to Yen: $${netDollars} \\times ${rate} = ${yen}\\text{ JPY}$.`,
-        },
-      };
-    },
-  },
-
-  // 1.16 Two-way currency conversion (Numeric - Core Calc)
-  {
-    key: 'ch1-currency-roundtrip',
-    chapterId: 1,
-    topicId: '1.16',
-    tier: 'Core',
-    paperType: 'Calculator',
-    build: (rng, idSuffix) => {
-      const rate = pick(rng, [0.85, 0.88, 0.92, 0.94]);
-      const startUsd = pick(rng, [400, 450, 500, 600, 750]);
-      const spendEur = pick(rng, [210, 240, 265, 285, 310]);
-      const remEur = startUsd * rate - spendEur;
-      const ans = Number((remEur / rate).toFixed(2));
-      return {
-        signature: `1.16-rt:${startUsd}:${rate}:${spendEur}`,
-        question: {
-          id: `gen-1.16r-${idSuffix}`,
-          chapterId: 1,
-          topicId: '1.16',
-          topicTitle: 'Money',
-          tier: 'Core',
-          paperType: 'Calculator',
-          marks: 3,
-          sourceRef: 'Paper 3 Calc · Topic 1.16',
-          question: `The exchange rate is $\\$1 = €${rate}$. A traveller changes $\\$${startUsd}$ into euros, spends $€${spendEur}$, and changes the remaining euros back into dollars at the same rate. How many dollars do they receive to the nearest cent ($2$ d.p.)?`,
-          questionType: 'numeric',
-          correctAnswer: ans.toFixed(2),
-          numericAnswer: ans,
-          tolerance: 0.02,
-          unit: '$',
-          markScheme: [
-            { code: 'M1', detail: `$${startUsd} \\times ${rate} = €${(startUsd * rate).toFixed(2)}$` },
-            { code: 'M1', detail: `Remaining euros $= €${remEur.toFixed(2)}$, then $\\div ${rate}$` },
-            { code: 'A1', detail: `$\\$${ans.toFixed(2)}$` },
-          ],
-          fullSolution: `Convert $\\$${startUsd}$ to euros: $${startUsd} \\times ${rate} = €${(startUsd * rate).toFixed(2)}$. Subtract $€${spendEur}$ leaving $€${remEur.toFixed(2)}$. Divide by $${rate}$ to convert back: $\\$${ans.toFixed(2)}$.`,
-        },
-      };
-    },
-  },
-
-  // 1.12 Ratio sharing (Numeric - Core Calc)
-  {
-    key: 'ch1-ratio-share',
-    chapterId: 1,
-    topicId: '1.12',
-    tier: 'Core',
-    paperType: 'Calculator',
-    build: (rng, idSuffix) => {
-      const ratios: Array<[number, number, number]> = [
-        [2, 3, 5],
-        [3, 4, 5],
-        [2, 5, 8],
-        [1, 3, 6],
-        [3, 5, 7],
-      ];
-      const [a, b, c] = pick(rng, ratios);
-      const sumParts = a + b + c;
-      const partValue = randInt(rng, 14, 35);
-      const total = sumParts * partValue;
-      const diff = (c - a) * partValue;
-      return {
-        signature: `1.12-ratio:${a}:${b}:${c}:${partValue}`,
-        question: {
-          id: `gen-1.12-${idSuffix}`,
-          chapterId: 1,
-          topicId: '1.12',
-          topicTitle: 'Rates',
-          tier: 'Core',
-          paperType: 'Calculator',
-          marks: 3,
-          sourceRef: 'Paper 3 Calc · Topic 1.12',
-          question: `A prize of $\\$${total}$ is shared among three winners in the ratio $${a} : ${b} : ${c}$. Calculate the difference between the largest share and the smallest share in dollars.`,
-          questionType: 'numeric',
-          correctAnswer: String(diff),
-          numericAnswer: diff,
-          tolerance: 0,
-          unit: '$',
-          markScheme: [
-            { code: 'M1', detail: `Total parts $= ${a} + ${b} + ${c} = ${sumParts}$` },
-            { code: 'M1', detail: `$1$ part $= ${total} \\div ${sumParts} = \\$${partValue}$` },
-            { code: 'A1', detail: `Difference $= (${c} - ${a}) \\times ${partValue} = \\$${diff}$` },
-          ],
-          fullSolution: `Sum the ratio parts: $${sumParts}$. Each part is $\\$${total} \\div ${sumParts} = \\$${partValue}$. The difference between largest and smallest shares is $${c - a}$ parts $= ${c - a} \\times ${partValue} = \\$${diff}$.`,
-        },
-      };
-    },
-  },
-
-  // 1.10 Limits of accuracy (Numeric - Extended Calc)
-  {
-    key: 'ch1-bounds-calc',
-    chapterId: 1,
-    topicId: '1.10',
-    tier: 'Extended',
-    paperType: 'Calculator',
-    build: (rng, idSuffix) => {
-      const length = randInt(rng, 12, 24);
-      const width = randInt(rng, 7, 15);
-      const boundType = rng() < 0.5 ? 'lower' : 'upper';
-      const lBound = boundType === 'lower' ? length - 0.5 : length + 0.5;
-      const wBound = boundType === 'lower' ? width - 0.5 : width + 0.5;
-      const area = Number((lBound * wBound).toFixed(2));
-      return {
-        signature: `1.10-bounds:${boundType}:${length}:${width}`,
-        question: {
-          id: `gen-1.10-${idSuffix}`,
-          chapterId: 1,
-          topicId: '1.10',
-          topicTitle: 'Limits of accuracy',
-          tier: 'Extended',
-          paperType: 'Calculator',
-          marks: 3,
-          sourceRef: 'Paper 4 Calc · Topic 1.10',
-          question: `A rectangular card has length $${length}\\text{ cm}$ and width $${width}\\text{ cm}$, both measured to the nearest centimetre. Calculate the ${boundType} bound for its area in $\\text{cm}^2$.`,
-          questionType: 'numeric',
-          correctAnswer: String(area),
-          numericAnswer: area,
-          tolerance: 0.01,
-          unit: 'cm²',
-          markScheme: [
-            { code: 'B1', detail: `Bounds used: $${lBound}\\text{ cm}$ and $${wBound}\\text{ cm}$` },
-            { code: 'M1', detail: `$${lBound} \\times ${wBound}$` },
-            { code: 'A1', detail: `$${area}\\text{ cm}^2$` },
-          ],
-          fullSolution: `Measurements to the nearest $1\\text{ cm}$ have bounds $\\pm 0.5\\text{ cm}$. Multiply the two ${boundType} bounds: $${lBound} \\times ${wBound} = ${area}\\text{ cm}^2$.`,
-        },
-      };
-    },
-  },
-
-  // 1.13 Reverse percentages (Numeric & MCQ - Extended Calc)
-  {
-    key: 'ch1-reverse-pct',
-    chapterId: 1,
-    topicId: '1.13',
-    tier: 'Extended',
-    paperType: 'Calculator',
-    build: (rng, idSuffix) => {
-      const pct = pick(rng, [12, 15, 18, 20, 25]);
-      const original = pick(rng, [400, 500, 600, 750, 800, 900, 1200]);
-      const sale = Math.round(original * (1 - pct / 100));
-      const useMcq = rng() < 0.45;
-
-      if (useMcq) {
-        const wrongAdd = Math.round(sale * (1 + pct / 100));
-        const options = buildUniqueMcqOptions(rng, `$${original}`, [
-          `$${wrongAdd}`,
-          `$${original - 50}`,
-          `$${original + 100}`,
-        ]);
-        return {
-          signature: `1.13-rev-mcq:${pct}:${original}`,
-          question: {
-            id: `gen-1.13m-${idSuffix}`,
-            chapterId: 1,
-            topicId: '1.13',
-            topicTitle: 'Percentages',
-            tier: 'Extended',
-            paperType: 'Calculator',
-            marks: 3,
-            sourceRef: 'Paper 4 Calc · Topic 1.13',
-            question: `In a sale, the price of a laptop is reduced by $${pct}\\%$ to $\\$${sale}$. What was the original price of the laptop?`,
-            questionType: 'mcq',
-            options,
-            correctAnswer: `$${original}`,
-            markScheme: [
-              { code: 'M1', detail: `$\\$${sale} = ${100 - pct}\\%$ of original` },
-              { code: 'A1', detail: `$${sale} \\div ${(1 - pct / 100).toFixed(2)} = \\$${original}$` },
-            ],
-            fullSolution: `A $${pct}\\%$ discount leaves $${100 - pct}\\% = ${(1 - pct / 100).toFixed(2)}$ of the original price. Divide: $${sale} \\div ${(1 - pct / 100).toFixed(2)} = \\$${original}$.`,
-          },
-        };
-      }
-
-      return {
-        signature: `1.13-rev:${pct}:${original}`,
-        question: {
-          id: `gen-1.13-${idSuffix}`,
-          chapterId: 1,
-          topicId: '1.13',
-          topicTitle: 'Percentages',
-          tier: 'Extended',
-          paperType: 'Calculator',
-          marks: 3,
-          sourceRef: 'Paper 4 Calc · Topic 1.13',
-          question: `After a $${pct}\\%$ reduction, a tablet costs $\\$${sale}$. Calculate the original price of the tablet in dollars.`,
-          questionType: 'numeric',
-          correctAnswer: String(original),
-          numericAnswer: original,
-          tolerance: 0.01,
-          unit: '$',
-          markScheme: [
-            { code: 'M1', detail: `$${100 - pct}\\%$ corresponds to $\\$${sale}$` },
-            { code: 'M1', detail: `$${sale} \\div ${(1 - pct / 100).toFixed(2)}$` },
-            { code: 'A1', detail: `$\\$${original}$` },
-          ],
-          fullSolution: `Divide the sale price by the multiplier ${(1 - pct / 100).toFixed(2)}: $${sale} \\div ${(1 - pct / 100).toFixed(2)} = \\$${original}$.`,
-        },
-      };
-    },
-  },
-
-  // 2.5 Simultaneous equations (Numeric - Core Non-Calc)
-  {
-    key: 'ch2-simul-eq',
-    chapterId: 2,
-    topicId: '2.5',
-    tier: 'Core',
-    paperType: 'Non-Calculator',
-    build: (rng, idSuffix) => {
-      const x = randInt(rng, 2, 8);
-      const y = randInt(rng, 1, 6);
-      const a = randInt(rng, 2, 4);
-      const b = randInt(rng, 2, 5);
-      const c = randInt(rng, 1, 3);
-      const rhs1 = a * x + b * y;
-      const rhs2 = c * x - b * y;
-      return {
-        signature: `2.5-sim:${a}:${b}:${c}:${x}:${y}`,
-        question: {
-          id: `gen-2.5-${idSuffix}`,
-          chapterId: 2,
-          topicId: '2.5',
-          topicTitle: 'Equations',
-          tier: 'Core',
-          paperType: 'Non-Calculator',
-          marks: 3,
-          sourceRef: 'Paper 1 Non-Calc · Topic 2.5',
-          question: `Solve the simultaneous equations $${a}x + ${b}y = ${rhs1}$ and $${c === 1 ? '' : c}x - ${b}y = ${rhs2}$. Enter the value of $x$.`,
-          questionType: 'numeric',
-          correctAnswer: String(x),
-          numericAnswer: x,
-          tolerance: 0,
-          markScheme: [
-            { code: 'M1', detail: `Add the two equations to eliminate $y$: $${a + c}x = ${rhs1 + rhs2}$` },
-            { code: 'A1', detail: `$x = ${x}$` },
-            { code: 'A1', detail: `$y = ${y}$` },
-          ],
-          fullSolution: `Adding the equations eliminates $\\pm ${b}y$: $${a + c}x = ${rhs1 + rhs2} \\implies x = ${x}$.`,
-        },
-      };
-    },
-  },
-
-  // 2.7 Quadratic sequences (Numeric - Extended Non-Calc, fast a+b+c method)
-  {
-    key: 'ch2-quad-seq',
-    chapterId: 2,
-    topicId: '2.7',
-    tier: 'Extended',
-    paperType: 'Non-Calculator',
-    build: (rng, idSuffix) => {
-      const a = pick(rng, [1, 2, 3]);
-      const b = pick(rng, [-3, -2, -1, 1, 2, 3, 4]);
-      const c = randInt(rng, -3, 7);
-      const term = (n: number) => a * n * n + b * n + c;
-      const first4 = [term(1), term(2), term(3), term(4)].join(', ');
-      const targetN = pick(rng, [8, 9, 10, 11, 12]);
-      const ans = term(targetN);
-      const aLabel = a === 1 ? '' : String(a);
-      const bLabel = b === 0 ? '' : b === 1 ? ' + n' : b === -1 ? ' - n' : b > 0 ? ` + ${b}n` : ` - ${Math.abs(b)}n`;
-      const cLabel = c === 0 ? '' : c > 0 ? ` + ${c}` : ` - ${Math.abs(c)}`;
-      const d1 = term(2) - term(1);
-      return {
-        signature: `2.7-seq:${a}:${b}:${c}:${targetN}`,
-        question: {
-          id: `gen-2.7-${idSuffix}`,
-          chapterId: 2,
-          topicId: '2.7',
-          topicTitle: 'Sequences',
-          tier: 'Extended',
-          paperType: 'Non-Calculator',
-          marks: 3,
-          sourceRef: 'Paper 2 Non-Calc · Topic 2.7',
-          question: `A quadratic sequence begins $${first4}, \\dots$. Find its $n$-th term and calculate the $${targetN}$th term.`,
-          questionType: 'numeric',
-          correctAnswer: String(ans),
-          numericAnswer: ans,
-          tolerance: 0,
-          markScheme: [
-            { code: 'M1', detail: `$2a = ${2 * a} \\implies a = ${a}$; $3a + b = ${d1} \\implies b = ${b}$` },
-            { code: 'A1', detail: `$a + b + c = ${term(1)} \\implies c = ${c}$, so $u_n = ${aLabel}n^2${bLabel}${cLabel}$` },
-            { code: 'A1', detail: `$u_{${targetN}} = ${ans}$` },
-          ],
-          fullSolution: `Using the fast leading-column method: $2a = ${2 * a} \\implies a = ${a}$; $3(${a}) + b = ${d1} \\implies b = ${b}$; ${a} + (${b}) + c = ${term(1)} \\implies c = ${c}$. Thus $u_n = ${aLabel}n^2${bLabel}${cLabel}$, giving $u_{${targetN}} = ${ans}$.`,
-        },
-      };
-    },
-  },
-
-  // 2.7 Cubic sequences (Numeric - Extended Non-Calc, fast 6a/12a+2b/7a+3b+c/a+b+c+d method)
-  {
-    key: 'ch2-cubic-seq',
-    chapterId: 2,
-    topicId: '2.7',
-    tier: 'Extended',
-    paperType: 'Non-Calculator',
-    build: (rng, idSuffix) => {
-      const a = pick(rng, [1, 2]);
-      const b = pick(rng, [-2, -1, 0, 1, 2, 3]);
-      const c = pick(rng, [-2, 0, 1, 2, 3]);
-      const d = randInt(rng, -4, 5);
-      const term = (n: number) => a * n * n * n + b * n * n + c * n + d;
-      const first5 = [term(1), term(2), term(3), term(4), term(5)].join(', ');
-      const targetN = pick(rng, [6, 7]);
-      const ans = term(targetN);
-      const aLabel = a === 1 ? '' : String(a);
-      const bLabel = b === 0 ? '' : b === 1 ? ' + n^2' : b === -1 ? ' - n^2' : b > 0 ? ` + ${b}n^2` : ` - ${Math.abs(b)}n^2`;
-      const cLabel = c === 0 ? '' : c === 1 ? ' + n' : c === -1 ? ' - n' : c > 0 ? ` + ${c}n` : ` - ${Math.abs(c)}n`;
-      const dLabel = d === 0 ? '' : d > 0 ? ` + ${d}` : ` - ${Math.abs(d)}`;
-      const d1 = term(2) - term(1);
-      const d2 = term(3) - 2 * term(2) + term(1);
-      return {
-        signature: `2.7-cubic:${a}:${b}:${c}:${d}:${targetN}`,
-        question: {
-          id: `gen-2.7c-${idSuffix}`,
-          chapterId: 2,
-          topicId: '2.7',
-          topicTitle: 'Sequences',
-          tier: 'Extended',
-          paperType: 'Non-Calculator',
+          topicId: '1.2',
+          topicTitle: 'The Discriminant & Nature of Roots',
+          paperModule: 'P1',
+          paperType: 'Pure Mathematics 1',
           marks: 4,
-          sourceRef: 'Paper 2 Non-Calc · Topic 2.7',
-          question: `A cubic sequence begins $${first5}, \\dots$. Find the $n$-th term formula and calculate the $${targetN}$th term.`,
-          questionType: 'numeric',
-          correctAnswer: String(ans),
-          numericAnswer: ans,
-          tolerance: 0,
-          markScheme: [
-            { code: 'B1', detail: `Constant 3rd difference $D_3 = ${6 * a} \\implies 6a = ${6 * a} \\implies a = ${a}$` },
-            { code: 'M1', detail: `$12a + 2b = ${d2} \\implies b = ${b}$; $7a + 3b + c = ${d1} \\implies c = ${c}$` },
-            { code: 'A1', detail: `$a+b+c+d = ${term(1)} \\implies d = ${d}$, so $u_n = ${aLabel}n^3${bLabel}${cLabel}${dLabel}$` },
-            { code: 'A1', detail: `$u_{${targetN}} = ${ans}$` },
-          ],
-          fullSolution: `Constant 3rd difference is $${6 * a}$, so $a = ${a}$. Next $12(${a}) + 2b = ${d2} \\implies b = ${b}$; $7(${a}) + 3(${b}) + c = ${d1} \\implies c = ${c}$; and ${a} + (${b}) + (${c}) + d = ${term(1)} \\implies d = ${d}$. Evaluating $u_{${targetN}}$ gives $${ans}$.`,
-        },
-      };
-    },
-  },
-
-  // 2.8 Inverse proportion (Numeric - Extended Calc)
-  {
-    key: 'ch2-inv-prop',
-    chapterId: 2,
-    topicId: '2.8',
-    tier: 'Extended',
-    paperType: 'Calculator',
-    build: (rng, idSuffix) => {
-      const shift = randInt(rng, 1, 3);
-      const x1 = randInt(rng, 1, 3);
-      const d1 = x1 + shift;
-      const d2 = d1 * 2;
-      const x2 = d2 - shift;
-      const y2 = pick(rng, [1, 2, 3, 4]);
-      const y1 = y2 * 4;
-      const k = y1 * d1 * d1;
-      return {
-        signature: `2.8-prop:${shift}:${x1}:${y2}`,
-        question: {
-          id: `gen-2.8-${idSuffix}`,
-          chapterId: 2,
-          topicId: '2.8',
-          topicTitle: 'Proportion',
-          tier: 'Extended',
-          paperType: 'Calculator',
-          marks: 3,
-          sourceRef: 'Paper 4 Calc · Topic 2.8',
-          question: `$y$ is inversely proportional to $(x + ${shift})^2$. When $x = ${x1}$, $y = ${y1}$. Find the value of $y$ when $x = ${x2}$.`,
-          questionType: 'numeric',
-          correctAnswer: String(y2),
-          numericAnswer: y2,
-          tolerance: 0.001,
-          markScheme: [
-            { code: 'M1', detail: `$y = \\frac{k}{(x + ${shift})^2}$` },
-            { code: 'A1', detail: `$k = ${y1} \\times ${d1}^2 = ${k}$` },
-            { code: 'A1', detail: `$y = \\frac{${k}}{${d2}^2} = ${y2}$` },
-          ],
-          fullSolution: `Write $y = \\frac{k}{(x + ${shift})^2}$. Substituting $(${x1}, ${y1})$ gives $k = ${k}$. Then at $x = ${x2}$, $y = \\frac{${k}}{${d2}^2} = ${y2}$.`,
-        },
-      };
-    },
-  },
-
-  // 2.12 Differentiation stationary point (Numeric - Extended Non-Calc)
-  {
-    key: 'ch2-diff-stationary',
-    chapterId: 2,
-    topicId: '2.12',
-    tier: 'Extended',
-    paperType: 'Non-Calculator',
-    build: (rng, idSuffix) => {
-      const root = pick(rng, [2, 3, 4, 5, 6]);
-      const linearCoeff = 3 * root * root;
-      const constant = randInt(rng, 2, 15);
-      return {
-        signature: `2.12-stat:${root}:${constant}`,
-        question: {
-          id: `gen-2.12-${idSuffix}`,
-          chapterId: 2,
-          topicId: '2.12',
-          topicTitle: 'Differentiation',
-          tier: 'Extended',
-          paperType: 'Non-Calculator',
-          marks: 3,
-          sourceRef: 'Paper 2 Non-Calc · Topic 2.12',
-          question: `A curve has equation $y = x^3 - ${linearCoeff}x + ${constant}$. Find the positive $x$-coordinate where the curve has a stationary point.`,
-          questionType: 'numeric',
-          correctAnswer: String(root),
-          numericAnswer: root,
-          tolerance: 0,
-          markScheme: [
-            { code: 'M1', detail: `$\\frac{\\mathrm{d}y}{\\mathrm{d}x} = 3x^2 - ${linearCoeff}$` },
-            { code: 'M1', detail: `$3x^2 - ${linearCoeff} = 0 \\implies x^2 = ${root * root}$` },
-            { code: 'A1', detail: `$x = ${root}$` },
-          ],
-          fullSolution: `Differentiate to obtain $\\frac{\\mathrm{d}y}{\\mathrm{d}x} = 3x^2 - ${linearCoeff}$. Set to $0$: $x^2 = ${root * root}$, so the positive stationary $x$-coordinate is $${root}$.`,
-        },
-      };
-    },
-  },
-
-  // 2.13 Functions fg(k) (MCQ - Extended Non-Calc)
-  {
-    key: 'ch2-functions-mcq',
-    chapterId: 2,
-    topicId: '2.13',
-    tier: 'Extended',
-    paperType: 'Non-Calculator',
-    build: (rng, idSuffix) => {
-      const a = randInt(rng, 2, 5);
-      const b = randInt(rng, 1, 7);
-      const c = randInt(rng, 1, 5);
-      const x = randInt(rng, 2, 4);
-      const gx = x * x + c;
-      const fgx = a * gx - b;
-      const gfx = (a * x - b) * (a * x - b) + c;
-      const wrong1 = a * (x * x - c) - b;
-      const wrong2 = fgx + 4;
-      const options = buildUniqueMcqOptions(rng, String(fgx), [
-        String(gfx),
-        String(wrong1),
-        String(wrong2),
-        String(fgx - 2),
-      ]);
-      return {
-        signature: `2.13-fg:${a}:${b}:${c}:${x}`,
-        question: {
-          id: `gen-2.13-${idSuffix}`,
-          chapterId: 2,
-          topicId: '2.13',
-          topicTitle: 'Functions',
-          tier: 'Extended',
-          paperType: 'Non-Calculator',
-          marks: 2,
-          sourceRef: 'Paper 2 Non-Calc · Topic 2.13',
-          question: `Given $\\mathrm{f}(x) = ${a}x - ${b}$ and $\\mathrm{g}(x) = x^2 + ${c}$, what is $\\mathrm{fg}(${x})$?`,
-          questionType: 'mcq',
-          options,
-          correctAnswer: String(a * gx - b),
-          markScheme: [
-            { code: 'M1', detail: `$\\mathrm{g}(${x}) = ${x}^2 + ${c} = ${gx}$` },
-            { code: 'A1', detail: `$\\mathrm{f}(${gx}) = ${a}(${gx}) - ${b} = ${a * gx - b}$` },
-          ],
-          fullSolution: `Evaluate inner function $\\mathrm{g}(${x}) = ${gx}$ first, then substitute into $\\mathrm{f}$: $${a}(${gx}) - ${b} = ${a * gx - b}$.`,
-        },
-      };
-    },
-  },
-
-  // 3.4 Distance between points (Numeric - Extended Non-Calc)
-  {
-    key: 'ch3-distance',
-    chapterId: 3,
-    topicId: '3.4',
-    tier: 'Extended',
-    paperType: 'Non-Calculator',
-    build: (rng, idSuffix) => {
-      const triples: Array<[number, number, number]> = [
-        [3, 4, 5],
-        [6, 8, 10],
-        [5, 12, 13],
-        [8, 15, 17],
-        [9, 12, 15],
-      ];
-      const [dx, dy, dist] = pick(rng, triples);
-      const x1 = randInt(rng, -5, 4);
-      const y1 = randInt(rng, -4, 5);
-      const x2 = x1 + dx;
-      const y2 = y1 + dy;
-      return {
-        signature: `3.4-dist:${x1}:${y1}:${x2}:${y2}`,
-        question: {
-          id: `gen-3.4-${idSuffix}`,
-          chapterId: 3,
-          topicId: '3.4',
-          topicTitle: 'Length and midpoint',
-          tier: 'Extended',
-          paperType: 'Non-Calculator',
-          marks: 2,
-          sourceRef: 'Paper 2 Non-Calc · Topic 3.4',
-          question: `Points $A(${x1}, ${y1})$ and $B(${x2}, ${y2})$ lie in the Cartesian plane. Calculate the exact length $AB$.`,
-          questionType: 'numeric',
-          correctAnswer: String(dist),
-          numericAnswer: dist,
-          tolerance: 0,
-          markScheme: [
-            { code: 'M1', detail: `$\\sqrt{(${x2} - (${x1}))^2 + (${y2} - (${y1}))^2} = \\sqrt{${dx}^2 + ${dy}^2}$` },
-            { code: 'A1', detail: `$${dist}$` },
-          ],
-          fullSolution: `Compute $\\Delta x = ${dx}$ and $\\Delta y = ${dy}$. Distance $= \\sqrt{${dx}^2 + ${dy}^2} = \\sqrt{${dist * dist}} = ${dist}$.`,
-        },
-      };
-    },
-  },
-
-  // 3.7 Perpendicular gradient (Numeric/Text - Extended Non-Calc)
-  {
-    key: 'ch3-perp-gradient',
-    chapterId: 3,
-    topicId: '3.7',
-    tier: 'Extended',
-    paperType: 'Non-Calculator',
-    build: (rng, idSuffix) => {
-      const a = pick(rng, [1, 2, 3]);
-      const k = pick(rng, [2, 3, 4, 5]);
-      const b = a * k;
-      const c = randInt(rng, 10, 25);
-      return {
-        signature: `3.7-perp:${a}:${b}:${c}`,
-        question: {
-          id: `gen-3.7-${idSuffix}`,
-          chapterId: 3,
-          topicId: '3.7',
-          topicTitle: 'Perpendicular lines',
-          tier: 'Extended',
-          paperType: 'Non-Calculator',
-          marks: 3,
-          sourceRef: 'Paper 2 Non-Calc · Topic 3.7',
-          question: `Line $L$ has equation $${a === 1 ? '' : a}x + ${b}y = ${c}$. What is the gradient of any line perpendicular to $L$?`,
+          sourceRef: '9709 P1 Syllabus 1.2',
+          question: `The line $y = ${lineExpr}$ is a tangent to the curve $y = ${curveExpr}$. Find the exact value of the constant $k$.`,
           questionType: 'numeric',
           correctAnswer: String(k),
+          acceptedAnswers: [String(k)],
           numericAnswer: k,
           tolerance: 0,
           markScheme: [
-            { code: 'M1', detail: `Rearranging gives $m_L = -\\frac{${a}}{${b}} = -\\frac{1}{${k}}$` },
-            { code: 'M1', detail: `Perpendicular rule $m_1 m_2 = -1$` },
-            { code: 'A1', detail: `$${k}$` },
+            { code: 'M1', detail: `Equate line and curve: $x^2 ${fmtSigned(diff, 'x')} + (${c0} - k) = 0$` },
+            { code: 'M1', detail: `Set discriminant $b^2 - 4ac = 0$: $(${diff})^2 - 4(1)(${c0} - k) = 0$` },
+            { code: 'A1', detail: `$${diff * diff} - 4(${c0} - k) = 0$` },
+            { code: 'A1', detail: `$k = ${k}$` },
           ],
-          fullSolution: `Rearranging into $y = mx + c$ gives gradient $m_L = -\\frac{1}{${k}}$. Taking the negative reciprocal gives $m_{\\perp} = ${k}$.`,
+          fullSolution: `Setting $${curveExpr} = ${lineExpr}$ gives $x^2 ${fmtSigned(diff, 'x')} + (${c0} - k) = 0$. For tangency, $b^2 - 4ac = 0$, so $(${diff})^2 - 4(${c0} - k) = 0 \\implies ${diff * diff} = 4(${c0} - k) \\implies ${c0} - k = ${(diff * diff) / 4} \\implies k = ${k}$.`,
         },
       };
     },
   },
-
-  // 4.6 Regular polygon angles (MCQ - Core Non-Calc)
+  // 1.3 Quadratic inequalities (MCQ)
   {
-    key: 'ch4-polygon-mcq',
-    chapterId: 4,
-    topicId: '4.6',
-    tier: 'Core',
-    paperType: 'Non-Calculator',
+    key: 'ch1-quad-ineq-mcq',
+    chapterId: 1,
+    topicId: '1.3',
+    group: 'algebra',
+    isMcq: true,
     build: (rng, idSuffix) => {
-      const n = pick(rng, [8, 9, 10, 12, 15, 18, 20, 24]);
-      const ext = 360 / n;
-      const askInterior = rng() < 0.45;
-      if (askInterior) {
-        const interior = 180 - ext;
-        const options = buildUniqueMcqOptions(rng, `${interior}°`, [
-          `${ext}°`,
-          `${180 - ext * 2}°`,
-          `${interior - 10}°`,
-          `${interior + 12}°`,
-        ]);
-        return {
-          signature: `4.6-int:${n}`,
-          question: {
-            id: `gen-4.6i-${idSuffix}`,
-            chapterId: 4,
-            topicId: '4.6',
-            topicTitle: 'Angles',
-            tier: 'Core',
-            paperType: 'Non-Calculator',
-            marks: 2,
-            sourceRef: 'Paper 1 Non-Calc · Topic 4.6',
-            question: `Calculate the size of one interior angle of a regular $${n}$-sided polygon.`,
-            questionType: 'mcq',
-            options,
-            correctAnswer: `${interior}°`,
-            markScheme: [
-              { code: 'M1', detail: `Exterior angle $= \\frac{360^\\circ}{${n}} = ${ext}^\\circ$` },
-              { code: 'A1', detail: `Interior angle $= 180^\\circ - ${ext}^\\circ = ${interior}^\\circ$` },
-            ],
-            fullSolution: `Each exterior angle is $360^\\circ \\div ${n} = ${ext}^\\circ$. Since interior and exterior angles are supplementary, each interior angle is $180^\\circ - ${ext}^\\circ = ${interior}^\\circ$.`,
-          },
-        };
-      }
-
-      const options = buildUniqueMcqOptions(rng, String(n), [
-        String(n - 2),
-        String(n + 4),
-        String(Math.max(4, Math.round(180 / ext))),
-      ]);
+      const r1 = pick(rng, [-4, -3, -2, -1]);
+      const r2 = pick(rng, [2, 3, 4, 5]);
+      const outside = pick(rng, [true, false]);
+      const b = -(r1 + r2);
+      const c = r1 * r2;
+      const ineqSign = outside ? '>' : '<';
+      const expr = `x^2 ${fmtSigned(b, 'x')} ${fmtSigned(c)} ${ineqSign} 0`;
+      const correct = outside
+        ? `x < ${r1} or x > ${r2}`
+        : `${r1} < x < ${r2}`;
+      const wrong1 = outside ? `${r1} < x < ${r2}` : `x < ${r1} or x > ${r2}`;
+      const wrong2 = outside ? `x < ${-r2} or x > ${-r1}` : `${-r2} < x < ${-r1}`;
+      const wrong3 = `x > ${r2}`;
       return {
-        signature: `4.6-ext:${n}`,
+        signature: `1.3-ineq:${r1}:${r2}:${outside ? 1 : 0}`,
         question: {
-          id: `gen-4.6e-${idSuffix}`,
-          chapterId: 4,
-          topicId: '4.6',
-          topicTitle: 'Angles',
-          tier: 'Core',
-          paperType: 'Non-Calculator',
-          marks: 2,
-          sourceRef: 'Paper 1 Non-Calc · Topic 4.6',
-          question: `Each exterior angle of a regular polygon is $${ext}^\\circ$. How many sides does the polygon have?`,
+          id: `gen-1.3-${idSuffix}`,
+          chapterId: 1,
+          topicId: '1.3',
+          topicTitle: 'Quadratic Inequalities & Disguised Quadratics',
+          paperModule: 'P1',
+          paperType: 'Pure Mathematics 1',
+          marks: 3,
+          sourceRef: '9709 P1 Syllabus 1.3',
+          question: `Solve the quadratic inequality $${expr}$.`,
           questionType: 'mcq',
-          options,
-          correctAnswer: String(n),
+          options: buildUniqueMcqOptions(rng, correct, [wrong1, wrong2, wrong3]),
+          correctAnswer: correct,
           markScheme: [
-            { code: 'M1', detail: `$n = 360 \\div ${ext}$` },
-            { code: 'A1', detail: `$${n}$ sides` },
+            { code: 'B1', detail: `Critical values $x = ${r1}$ and $x = ${r2}$` },
+            { code: 'M1', detail: 'Sketch upward parabola $y = (x - r_1)(x - r_2)$' },
+            { code: 'A1', detail: `Correct interval $${correct}$` },
           ],
-          fullSolution: `Exterior angles of any convex polygon sum to $360^\\circ$, so $n = \\frac{360}{${ext}} = ${n}$.`,
+          fullSolution: `Factorising gives $(x ${fmtSigned(-r1)})(x ${fmtSigned(-r2)}) ${ineqSign} 0$, with roots $x = ${r1}$ and $x = ${r2}$. Since the parabola opens upwards, the curve is ${outside ? 'above the x-axis outside the roots' : 'below the x-axis between the roots'}: $${correct}$.`,
         },
       };
     },
   },
-
-  // 4.8 Circle theorems (MCQ - Extended Non-Calc)
+  // 1.4 Disguised quadratic (exponential / surd)
   {
-    key: 'ch4-circle-mcq',
-    chapterId: 4,
-    topicId: '4.8',
-    tier: 'Extended',
-    paperType: 'Non-Calculator',
+    key: 'ch1-disguised-quadratic',
+    chapterId: 1,
+    topicId: '1.4',
+    group: 'algebra',
     build: (rng, idSuffix) => {
-      const abc = pick(rng, [64, 68, 72, 74, 78, 82, 86, 94]);
-      const adc = 180 - abc;
-      const options = buildUniqueMcqOptions(rng, `${adc}°`, [
-        `${abc}°`,
-        `${90 - Math.floor(abc / 2)}°`,
-        `${adc - 12}°`,
-        `${180 - adc + 10}°`,
-      ]);
+      // Solve 2^(2x) - (a+b)*2^x + ab = 0 where a=2^p, b=2^q or one negative root!
+      const p = pick(rng, [1, 2, 3]);
+      const negB = pick(rng, [-3, -2, -1]);
+      const u1 = 2 ** p; // positive root: 2^x = 2^p -> x = p
+      const sum = u1 + negB;
+      const prod = u1 * negB; // negative -> only 1 real solution!
       return {
-        signature: `4.8-cyc:${abc}`,
+        signature: `1.4-exp:${p}:${negB}`,
         question: {
-          id: `gen-4.8-${idSuffix}`,
-          chapterId: 4,
-          topicId: '4.8',
-          topicTitle: 'Circle theorems II',
-          tier: 'Extended',
-          paperType: 'Non-Calculator',
-          marks: 2,
-          sourceRef: 'Paper 2 Non-Calc · Topic 4.8',
-          question: `Points $A, B, C, D$ lie on the circumference of a circle in order. If $\\angle ABC = ${abc}^\\circ$, find the size of $\\angle ADC$.`,
-          questionType: 'mcq',
-          options,
-          correctAnswer: `${adc}°`,
+          id: `gen-1.4-${idSuffix}`,
+          chapterId: 1,
+          topicId: '1.4',
+          topicTitle: 'Simultaneous Equations (Linear & Quadratic)',
+          paperModule: 'P1',
+          paperType: 'Pure Mathematics 1',
+          marks: 4,
+          sourceRef: '9709 P1 Syllabus 1.4',
+          question: `Use the substitution $u = 2^x$ to solve $4^x ${fmtSigned(-sum)} \\cdot 2^x ${fmtSigned(prod)} = 0$. State the real value of $x$.`,
+          questionType: 'numeric',
+          correctAnswer: String(p),
+          acceptedAnswers: [String(p)],
+          numericAnswer: p,
+          tolerance: 0,
           markScheme: [
-            { code: 'M1', detail: 'Opposite angles in a cyclic quadrilateral sum to $180^\\circ$' },
-            { code: 'A1', detail: `$180^\\circ - ${abc}^\\circ = ${adc}^\\circ$` },
+            { code: 'M1', detail: `Rewrite $4^x = (2^x)^2 = u^2$ to form $u^2 ${fmtSigned(-sum, 'u')} ${fmtSigned(prod)} = 0$` },
+            { code: 'A1', detail: `Factorise $(u - ${u1})(u + ${Math.abs(negB)}) = 0$` },
+            { code: 'B1', detail: `Reject $u = ${negB} < 0$ since $2^x > 0$` },
+            { code: 'A1', detail: `$2^x = ${u1} \\implies x = ${p}$` },
           ],
-          fullSolution: `$ABCD$ is a cyclic quadrilateral, so opposite angles add to $180^\\circ$: $\\angle ADC = 180^\\circ - ${abc}^\\circ = ${adc}^\\circ$.`,
+          fullSolution: `Letting $u = 2^x > 0$, we obtain $u^2 ${fmtSigned(-sum, 'u')} ${fmtSigned(prod)} = 0$, so $(u - ${u1})(u + ${Math.abs(negB)}) = 0$. Since $2^x > 0$, discard $u = ${negB}$; thus $2^x = ${u1} = 2^{${p}} \\implies x = ${p}$.`,
         },
       };
     },
   },
-
-  // 5.3 Sectors and arcs (Numeric - Core Calc)
+  // 2.1 Composite function evaluation
   {
-    key: 'ch5-sector-area',
+    key: 'ch2-composite-fn',
+    chapterId: 2,
+    topicId: '2.1',
+    group: 'algebra',
+    build: (rng, idSuffix) => {
+      const m = pick(rng, [2, 3, -2]);
+      const c = pick(rng, [-3, -1, 1, 4, 5]);
+      const a = pick(rng, [1, 2]);
+      const x0 = pick(rng, [1, 2, 3]);
+      // f(x) = m x + c, g(x) = a x^2 + 1 -> find fg(x0)
+      const gx = a * x0 * x0 + 1;
+      const fgx = m * gx + c;
+      return {
+        signature: `2.1-fg:${m}:${c}:${a}:${x0}`,
+        question: {
+          id: `gen-2.1-${idSuffix}`,
+          chapterId: 2,
+          topicId: '2.1',
+          topicTitle: 'Functions, Domain, Range & One-One Conditions',
+          paperModule: 'P1',
+          paperType: 'Pure Mathematics 1',
+          marks: 3,
+          sourceRef: '9709 P1 Syllabus 2.1',
+          question: `Functions $f$ and $g$ are defined for $x \\in \\mathbb{R}$ by $f(x) = ${m}x ${fmtSigned(c)}$ and $g(x) = ${a === 1 ? '' : a}x^2 + 1$. Find the value of $fg(${x0})$.`,
+          questionType: 'numeric',
+          correctAnswer: String(fgx),
+          acceptedAnswers: [String(fgx)],
+          numericAnswer: fgx,
+          tolerance: 0,
+          markScheme: [
+            { code: 'M1', detail: `Evaluate inner function first: $g(${x0}) = ${a}(${x0})^2 + 1 = ${gx}$` },
+            { code: 'M1', detail: `Substitute into outer function: $f(${gx}) = ${m}(${gx}) ${fmtSigned(c)}$` },
+            { code: 'A1', detail: `$${fgx}$` },
+          ],
+          fullSolution: `$g(${x0}) = ${a}(${x0})^2 + 1 = ${gx}$. Then $fg(${x0}) = f(${gx}) = ${m}(${gx}) ${fmtSigned(c)} = ${fgx}$.`,
+        },
+      };
+    },
+  },
+  // 2.2 Inverse function evaluation
+  {
+    key: 'ch2-inverse-fn',
+    chapterId: 2,
+    topicId: '2.2',
+    group: 'algebra',
+    build: (rng, idSuffix) => {
+      const k = pick(rng, [2, 3, 4]);
+      const c = pick(rng, [-5, -3, 1, 3, 5]);
+      // f(x) = (x - c)^2 + k for x >= c, find f^-1(target)
+      const offset = pick(rng, [2, 3, 4, 5]);
+      const targetY = offset * offset + k;
+      const ans = c + offset;
+      return {
+        signature: `2.2-inv:${k}:${c}:${offset}`,
+        question: {
+          id: `gen-2.2-${idSuffix}`,
+          chapterId: 2,
+          topicId: '2.2',
+          topicTitle: 'Composite & Inverse Functions',
+          paperModule: 'P1',
+          paperType: 'Pure Mathematics 1',
+          marks: 3,
+          sourceRef: '9709 P1 Syllabus 2.2',
+          question: `The function $f$ is defined by $f(x) = (x ${fmtSigned(-c)})^2 + ${k}$ for $x \\ge ${c}$. Find the exact value of $f^{-1}(${targetY})$.`,
+          questionType: 'numeric',
+          correctAnswer: String(ans),
+          acceptedAnswers: [String(ans)],
+          numericAnswer: ans,
+          tolerance: 0,
+          markScheme: [
+            { code: 'M1', detail: `Set $(x ${fmtSigned(-c)})^2 + ${k} = ${targetY} \\implies (x ${fmtSigned(-c)})^2 = ${offset * offset}$` },
+            { code: 'M1', detail: `Take positive square root because domain is $x \\ge ${c}$` },
+            { code: 'A1', detail: `$x = ${c} + ${offset} = ${ans}$` },
+          ],
+          fullSolution: `Solve $f(x) = ${targetY}$: $(x ${fmtSigned(-c)})^2 = ${targetY - k} = ${offset * offset}$. Since $x \\ge ${c}$, take the positive root: $x ${fmtSigned(-c)} = ${offset} \\implies f^{-1}(${targetY}) = ${ans}$.`,
+        },
+      };
+    },
+  },
+  // 2.3 Graph transformations (MCQ)
+  {
+    key: 'ch2-transform-mcq',
+    chapterId: 2,
+    topicId: '2.3',
+    group: 'algebra',
+    isMcq: true,
+    build: (rng, idSuffix) => {
+      const a = pick(rng, [2, 3, 4]);
+      const h = pick(rng, [2, 3, 5]);
+      const k = pick(rng, [1, 2, 4]);
+      // Start with (x0, y0) on y = f(x), transform to y = k + f(x/a - h)? Let's use clean: y = a f(x + h) - k
+      const x0 = pick(rng, [4, 6]);
+      const y0 = pick(rng, [3, 5]);
+      const xNew = x0 - h;
+      const yNew = a * y0 - k;
+      const correct = `(${xNew}, ${yNew})`;
+      const w1 = `(${x0 + h}, ${yNew})`;
+      const w2 = `(${xNew}, ${a * y0 + k})`;
+      const w3 = `(${x0 * a}, ${y0 - k})`;
+      return {
+        signature: `2.3-trans:${a}:${h}:${k}:${x0}:${y0}`,
+        question: {
+          id: `gen-2.3-${idSuffix}`,
+          chapterId: 2,
+          topicId: '2.3',
+          topicTitle: 'Transformations of Graphs',
+          paperModule: 'P1',
+          paperType: 'Pure Mathematics 1',
+          marks: 3,
+          sourceRef: '9709 P1 Syllabus 2.3',
+          question: `The point $P(${x0}, ${y0})$ lies on $y = f(x)$. Find the new coordinates of $P$ on the transformed curve $y = ${a}f(x + ${h}) - ${k}$.`,
+          questionType: 'mcq',
+          options: buildUniqueMcqOptions(rng, correct, [w1, w2, w3]),
+          correctAnswer: correct,
+          markScheme: [
+            { code: 'B1', detail: `Horizontal translation by vector $\\binom{-${h}}{0}$ gives $x = ${x0} - ${h} = ${xNew}$` },
+            { code: 'M1', detail: `Vertical stretch factor $${a}$ then translation $-${k}$: $y = ${a}(${y0}) - ${k}$` },
+            { code: 'A1', detail: `Coordinates $${correct}$` },
+          ],
+          fullSolution: `Replacing $x$ with $x + ${h}$ shifts left by $${h}$: $x' = ${x0} - ${h} = ${xNew}$. Outside $f$, multiplying by $${a}$ and subtracting $${k}$ gives $y' = ${a}(${y0}) - ${k} = ${yNew}$. Thus $P'$ is $${correct}$.`,
+        },
+      };
+    },
+  },
+  // 3.1/3.2 Perpendicular bisector y-intercept
+  {
+    key: 'ch3-perp-bisector',
+    chapterId: 3,
+    topicId: '3.2',
+    group: 'algebra',
+    build: (rng, idSuffix) => {
+      // Pick A(x1, y1), B(x2, y2) with midpoint M and integer perpendicular bisector intercept!
+      // Let A = (0, y1), B = (2*dx, y1 + 2*dy) -> M = (dx, y1 + dy).
+      // Slope AB = dy/dx. Perp slope = -dx/dy.
+      // Perp bisector: y = (-dx/dy)(x - dx) + (y1 + dy). At x = 0: c = dx^2/dy + y1 + dy.
+      const dy = pick(rng, [1, 2]);
+      const mult = pick(rng, [1, 2, 3]);
+      const dx = dy * mult; // ensures dx^2 / dy is integer!
+      const x1 = randInt(rng, -2, 2);
+      const y1 = randInt(rng, 1, 5);
+      const x2 = x1 + 2 * dx;
+      const y2 = y1 + 2 * dy;
+      const mx = (x1 + x2) / 2;
+      const my = (y1 + y2) / 2;
+      // perp slope = -dx/dy = -mult
+      const perpSlope = -mult;
+      const yIntercept = my - perpSlope * mx;
+      return {
+        signature: `3.2-perp:${x1}:${y1}:${dx}:${dy}`,
+        question: {
+          id: `gen-3.2-${idSuffix}`,
+          chapterId: 3,
+          topicId: '3.2',
+          topicTitle: 'Equations of Lines, Parallel & Perpendicular',
+          paperModule: 'P1',
+          paperType: 'Pure Mathematics 1',
+          marks: 4,
+          sourceRef: '9709 P1 Syllabus 3.2',
+          question: `Points $A(${x1}, ${y1})$ and $B(${x2}, ${y2})$ are joined by a line segment. Find the $y$-coordinate where the perpendicular bisector of $AB$ crosses the $y$-axis.`,
+          questionType: 'numeric',
+          correctAnswer: String(yIntercept),
+          acceptedAnswers: [String(yIntercept)],
+          numericAnswer: yIntercept,
+          tolerance: 0,
+          markScheme: [
+            { code: 'B1', detail: `Midpoint $M = (${mx}, ${my})$` },
+            { code: 'M1', detail: `Gradient of $AB = \\frac{${y2 - y1}}{${x2 - x1}} = ${formatFraction(dy, dx)}$, so perpendicular gradient $= ${perpSlope}$` },
+            { code: 'M1', detail: `Line equation $y - ${my} = ${perpSlope}(x - (${mx}))$` },
+            { code: 'A1', detail: `At $x = 0$, $y = ${yIntercept}$` },
+          ],
+          fullSolution: `Midpoint $M = \\left(\\frac{${x1}+${x2}}{2}, \\frac{${y1}+${y2}}{2}\\right) = (${mx}, ${my})$. Gradient of $AB$ is $\\frac{${y2 - y1}}{${x2 - x1}} = ${formatFraction(dy, dx)}$, so the perpendicular gradient is $${perpSlope}$. Substituting $M(${mx}, ${my})$ and $x = 0$ gives $y = ${my} - (${perpSlope})(${mx}) = ${yIntercept}$.`,
+        },
+      };
+    },
+  },
+  // 3.3 Circle centre & radius from expanded equation
+  {
+    key: 'ch3-circle-radius',
+    chapterId: 3,
+    topicId: '3.3',
+    group: 'algebra',
+    build: (rng, idSuffix) => {
+      const a = pick(rng, [-4, -3, 2, 3, 5]);
+      const b = pick(rng, [-5, -2, 1, 4, 6]);
+      const r = pick(rng, [3, 4, 5, 6, 7]);
+      // (x - a)^2 + (y - b)^2 = r^2 -> x^2 + y^2 - 2ax - 2by + (a^2 + b^2 - r^2) = 0
+      const d = -2 * a;
+      const e = -2 * b;
+      const c = a * a + b * b - r * r;
+      const eq = `x^2 + y^2 ${fmtSigned(d, 'x')} ${fmtSigned(e, 'y')} ${fmtSigned(c)} = 0`;
+      return {
+        signature: `3.3-rad:${a}:${b}:${r}`,
+        question: {
+          id: `gen-3.3-${idSuffix}`,
+          chapterId: 3,
+          topicId: '3.3',
+          topicTitle: 'Equation of a Circle & Tangents',
+          paperModule: 'P1',
+          paperType: 'Pure Mathematics 1',
+          marks: 3,
+          sourceRef: '9709 P1 Syllabus 3.3',
+          question: `A circle has equation $${eq}$. Find the radius of the circle.`,
+          questionType: 'numeric',
+          correctAnswer: String(r),
+          acceptedAnswers: [String(r)],
+          numericAnswer: r,
+          tolerance: 0,
+          markScheme: [
+            { code: 'M1', detail: `Complete the square: $(x ${fmtSigned(-a)})^2 + (y ${fmtSigned(-b)})^2 = ${a * a} + ${b * b} - (${c})$` },
+            { code: 'A1', detail: `Centre $(${a}, ${b})$ and $r^2 = ${r * r}$` },
+            { code: 'A1', detail: `Radius $r = ${r}$` },
+          ],
+          fullSolution: `Completing the square gives $(x ${fmtSigned(-a)})^2 - ${a * a} + (y ${fmtSigned(-b)})^2 - ${b * b} ${fmtSigned(c)} = 0$, so $(x ${fmtSigned(-a)})^2 + (y ${fmtSigned(-b)})^2 = ${r * r}$. Therefore the radius is $\\sqrt{${r * r}} = ${r}$.`,
+        },
+      };
+    },
+  },
+  // 4.1/4.2 Circular measure (arc length / sector area)
+  {
+    key: 'ch4-sector-area',
+    chapterId: 4,
+    topicId: '4.2',
+    group: 'calculus',
+    build: (rng, idSuffix) => {
+      const r = pick(rng, [4, 6, 8, 10, 12]);
+      const theta = pick(rng, [0.8, 1.2, 1.4, 1.5, 1.8]);
+      const area = Number((0.5 * r * r * theta).toFixed(2));
+      const arc = Number((r * theta).toFixed(2));
+      const perim = Number((2 * r + arc).toFixed(2));
+      return {
+        signature: `4.2-sector:${r}:${theta}`,
+        question: {
+          id: `gen-4.2-${idSuffix}`,
+          chapterId: 4,
+          topicId: '4.2',
+          topicTitle: 'Arc Length, Sector Area & Segment Area',
+          paperModule: 'P1',
+          paperType: 'Pure Mathematics 1',
+          marks: 3,
+          sourceRef: '9709 P1 Syllabus 4.2',
+          question: `A sector of a circle of radius $${r}\\text{ cm}$ has perimeter $${perim}\\text{ cm}$. Calculate the area of the sector in $\\text{cm}^2$.`,
+          questionType: 'numeric',
+          correctAnswer: String(area),
+          acceptedAnswers: [String(area)],
+          numericAnswer: area,
+          tolerance: 0.05,
+          unit: 'cm²',
+          markScheme: [
+            { code: 'M1', detail: `Perimeter $= 2r + r\\theta \\implies ${2 * r} + ${r}\\theta = ${perim}$` },
+            { code: 'A1', detail: `$\\theta = ${theta}\\text{ rad}$` },
+            { code: 'A1', detail: `Area $= \\frac{1}{2}r^2\\theta = \\frac{1}{2}(${r})^2(${theta}) = ${area}\\text{ cm}^2$` },
+          ],
+          fullSolution: `Using $P = 2r + r\\theta$, $${2 * r} + ${r}\\theta = ${perim} \\implies \\theta = \\frac{${arc}}{${r}} = ${theta}\\text{ rad}$. Then $A = \\frac{1}{2}r^2\\theta = \\frac{1}{2}(${r * r})(${theta}) = ${area}\\text{ cm}^2$.`,
+        },
+      };
+    },
+  },
+  // 5.1/5.2 Exact trig / Pythagorean identity
+  {
+    key: 'ch5-trig-identity-mcq',
+    chapterId: 5,
+    topicId: '5.2',
+    group: 'calculus',
+    isMcq: true,
+    build: (rng, idSuffix) => {
+      // Acute or obtuse theta: given sin theta = p/q (3/5, 5/13, 8/17) and pi/2 < theta < pi, find tan theta
+      const triples = [
+        [3, 4, 5],
+        [5, 12, 13],
+        [8, 15, 17],
+      ] as const;
+      const [opp, adj, hyp] = pick(rng, triples);
+      const obtuse = pick(rng, [true, false]);
+      const cosStr = obtuse ? `-${formatFraction(adj, hyp)}` : formatFraction(adj, hyp);
+      const tanStr = obtuse ? `-${formatFraction(opp, adj)}` : formatFraction(opp, adj);
+      const rangeText = obtuse
+        ? `\\frac{\\pi}{2} < \\theta < \\pi`
+        : `0 < \\theta < \\frac{\\pi}{2}`;
+      const wrong1 = obtuse ? formatFraction(opp, adj) : `-${formatFraction(opp, adj)}`;
+      const wrong2 = obtuse ? `-${formatFraction(adj, opp)}` : formatFraction(adj, opp);
+      const wrong3 = cosStr;
+      return {
+        signature: `5.2-id:${opp}:${hyp}:${obtuse ? 1 : 0}`,
+        question: {
+          id: `gen-5.2-${idSuffix}`,
+          chapterId: 5,
+          topicId: '5.2',
+          topicTitle: 'Trigonometric Identities (tan & sin²+cos²=1)',
+          paperModule: 'P1',
+          paperType: 'Pure Mathematics 1',
+          marks: 3,
+          sourceRef: '9709 P1 Syllabus 5.2',
+          question: `Given that $\\sin\\theta = \\frac{${opp}}{${hyp}}$ and $${rangeText}$, find the exact value of $\\tan\\theta$.`,
+          questionType: 'mcq',
+          options: buildUniqueMcqOptions(rng, tanStr, [wrong1, wrong2, wrong3]),
+          correctAnswer: tanStr,
+          markScheme: [
+            { code: 'M1', detail: `Use $\\cos^2\\theta = 1 - \\sin^2\\theta = 1 - \\frac{${opp * opp}}{${hyp * hyp}} = \\frac{${adj * adj}}{${hyp * hyp}}$` },
+            { code: 'A1', detail: `From quadrant $${rangeText}$, $\\cos\\theta = ${cosStr}$` },
+            { code: 'A1', detail: `$\\tan\\theta = \\frac{\\sin\\theta}{\\cos\\theta} = ${tanStr}$` },
+          ],
+          fullSolution: `$\\cos^2\\theta = 1 - \\left(\\frac{${opp}}{${hyp}}\\right)^2 = \\frac{${adj * adj}}{${hyp * hyp}}$. Since $${rangeText}$, $\\cos\\theta = ${cosStr}$, so $\\tan\\theta = \\frac{${opp}/${hyp}}{${cosStr}} = ${tanStr}$.`,
+        },
+      };
+    },
+  },
+  // 5.3 Trig equation root count / sum of roots
+  {
+    key: 'ch5-trig-eq-roots',
     chapterId: 5,
     topicId: '5.3',
-    tier: 'Core',
-    paperType: 'Calculator',
+    group: 'calculus',
     build: (rng, idSuffix) => {
-      const r = pick(rng, [6, 8, 9, 10, 12, 14]);
-      const angle = pick(rng, [45, 60, 72, 90, 120, 150]);
-      const exactArea = (angle / 360) * Math.PI * r * r;
-      const ans = Number(exactArea.toFixed(1));
+      // Solve k sin(m x) = c for 0 <= x <= 2 pi -> number of roots is 2*m (for 0 < c/k < 1)
+      const m = pick(rng, [2, 3, 4]);
+      const c = pick(rng, [1, 2, 3]);
+      const k = c + pick(rng, [1, 2]);
+      const numRoots = 2 * m;
       return {
-        signature: `5.3-sec:${r}:${angle}`,
+        signature: `5.3-roots:${m}:${c}:${k}`,
         question: {
           id: `gen-5.3-${idSuffix}`,
           chapterId: 5,
           topicId: '5.3',
-          topicTitle: 'Circles, arcs and sectors',
-          tier: 'Core',
-          paperType: 'Calculator',
+          topicTitle: 'Solving Trigonometric Equations',
+          paperModule: 'P1',
+          paperType: 'Pure Mathematics 1',
           marks: 3,
-          sourceRef: 'Paper 3 Calc · Topic 5.3',
-          question: `A sector of a circle has radius $${r}\\text{ cm}$ and central angle $${angle}^\\circ$. Calculate the area of the sector to $1$ decimal place.`,
+          sourceRef: '9709 P1 Syllabus 5.3',
+          question: `How many distinct solutions does the equation $${k}\\sin(${m}x) = ${c}$ have in the interval $0 \\le x \\le 2\\pi$?`,
           questionType: 'numeric',
-          correctAnswer: ans.toFixed(1),
-          numericAnswer: ans,
-          tolerance: 0.15,
-          unit: 'cm²',
-          markScheme: [
-            { code: 'M1', detail: `$\\frac{${angle}}{360} \\times \\pi \\times ${r}^2$` },
-            { code: 'A1', detail: `$${ans.toFixed(1)}\\text{ cm}^2$` },
-          ],
-          fullSolution: `Sector area $= \\frac{${angle}}{360} \\times \\pi \\times ${r}^2 \\approx ${ans.toFixed(1)}\\text{ cm}^2$.`,
-        },
-      };
-    },
-  },
-
-  // 5.4 Cone Total Surface Area (Numeric - Extended Calc)
-  {
-    key: 'ch5-cone-sa',
-    chapterId: 5,
-    topicId: '5.4',
-    tier: 'Extended',
-    paperType: 'Calculator',
-    build: (rng, idSuffix) => {
-      const triples: Array<[number, number, number]> = [
-        [3, 4, 5],
-        [6, 8, 10],
-        [5, 12, 13],
-        [9, 12, 15],
-        [8, 15, 17],
-      ];
-      const [r, h, l] = pick(rng, triples);
-      const k = r * l + r * r;
-      return {
-        signature: `5.4-cone:${r}:${h}`,
-        question: {
-          id: `gen-5.4-${idSuffix}`,
-          chapterId: 5,
-          topicId: '5.4',
-          topicTitle: 'Surface area and volume',
-          tier: 'Extended',
-          paperType: 'Calculator',
-          marks: 3,
-          sourceRef: 'Paper 4 Calc · Topic 5.4',
-          question: `A solid cone has base radius $${r}\\text{ cm}$ and vertical height $${h}\\text{ cm}$. Its total surface area (curved surface + base) is $k\\pi\\text{ cm}^2$. Find the integer value of $k$.`,
-          questionType: 'numeric',
-          correctAnswer: String(k),
-          numericAnswer: k,
+          correctAnswer: String(numRoots),
+          acceptedAnswers: [String(numRoots)],
+          numericAnswer: numRoots,
           tolerance: 0,
           markScheme: [
-            { code: 'B1', detail: `Slant height $l = \\sqrt{${r}^2 + ${h}^2} = ${l}\\text{ cm}$` },
-            { code: 'M1', detail: `Total SA $= \\pi r l + \\pi r^2 = ${r * l}\\pi + ${r * r}\\pi$` },
-            { code: 'A1', detail: `$k = ${k}$` },
+            { code: 'M1', detail: `Rewrite interval for $${m}x$: $0 \\le ${m}x \\le ${2 * m}\\pi$ (${m} full cycles)` },
+            { code: 'M1', detail: `Since $0 < \\frac{${c}}{${k}} < 1$, $\\sin u = \\frac{${c}}{${k}}$ has $2$ roots per cycle` },
+            { code: 'A1', detail: `Total solutions $= ${m} \\times 2 = ${numRoots}$` },
           ],
-          fullSolution: `By Pythagoras, slant height $l = \\sqrt{${r}^2 + ${h}^2} = ${l}\\text{ cm}$. Curved area $= ${r * l}\\pi$, base area $= ${r * r}\\pi$, so total SA $= ${k}\\pi \\implies k = ${k}$.`,
+          fullSolution: `Let $u = ${m}x$, so $0 \\le u \\le ${2 * m}\\pi$. Since $\\sin u = \\frac{${c}}{${k}} \\in (0, 1)$, there are $2$ positive roots in every $2\\pi$ cycle, giving $2 \\times ${m} = ${numRoots}$ solutions in $0 \\le x \\le 2\\pi$.`,
         },
       };
     },
   },
-
-  // 6.2 Right-angled Pythagoras (Numeric - Core Calc)
+  // 6.1 Binomial coefficient
   {
-    key: 'ch6-pythagoras',
+    key: 'ch6-binomial-coeff',
+    chapterId: 6,
+    topicId: '6.1',
+    group: 'algebra',
+    build: (rng, idSuffix) => {
+      const n = pick(rng, [4, 5, 6]);
+      const r = pick(rng, [2, 3]);
+      const a = pick(rng, [1, 2, 3]);
+      const b = pick(rng, [-3, -2, 2, 3]);
+      // Coefficient of x^r in (a + b x)^n
+      const coeff = comb(n, r) * a ** (n - r) * b ** r;
+      const expr = `(${a} ${fmtSigned(b, 'x')})^{${n}}`;
+      return {
+        signature: `6.1-binom:${n}:${r}:${a}:${b}`,
+        question: {
+          id: `gen-6.1-${idSuffix}`,
+          chapterId: 6,
+          topicId: '6.1',
+          topicTitle: 'Binomial Expansion of (a + b)^n',
+          paperModule: 'P1',
+          paperType: 'Pure Mathematics 1',
+          marks: 3,
+          sourceRef: '9709 P1 Syllabus 6.1',
+          question: `Find the coefficient of $x^{${r}}$ in the expansion of $${expr}$.`,
+          questionType: 'numeric',
+          correctAnswer: String(coeff),
+          acceptedAnswers: [String(coeff)],
+          numericAnswer: coeff,
+          tolerance: 0,
+          markScheme: [
+            { code: 'M1', detail: `Select term $\\binom{${n}}{${r}} (${a})^{${n - r}} (${b}x)^{${r}}$` },
+            { code: 'A1', detail: `$${comb(n, r)} \\times ${a ** (n - r)} \\times (${b ** r})$` },
+            { code: 'A1', detail: `Coefficient $= ${coeff}$` },
+          ],
+          fullSolution: `The $x^{${r}}$ term is $\\binom{${n}}{${r}} (${a})^{${n - r}} (${b}x)^{${r}} = ${comb(n, r)} \\times ${a ** (n - r)} \\times (${b ** r})x^{${r}} = ${coeff}x^{${r}}$. Thus the coefficient is $${coeff}$.`,
+        },
+      };
+    },
+  },
+  // 6.2 Arithmetic progression
+  {
+    key: 'ch6-ap-sum',
     chapterId: 6,
     topicId: '6.2',
-    tier: 'Core',
-    paperType: 'Calculator',
+    group: 'algebra',
     build: (rng, idSuffix) => {
-      const cases: Array<[number, number, number]> = [
-        [2.5, 6, 6.5],
-        [3, 4, 5],
-        [6, 8, 10],
-        [5, 12, 13],
-        [1.5, 2, 2.5],
-        [7, 24, 25],
-      ];
-      const [base, height, ladder] = pick(rng, cases);
+      const a = randInt(rng, 4, 15);
+      const d = pick(rng, [3, 4, 5, 6, -3, -4]);
+      const n = pick(rng, [10, 12, 14, 15, 16]);
+      const k1 = 3;
+      const k2 = 7;
+      const u3 = a + (k1 - 1) * d;
+      const u7 = a + (k2 - 1) * d;
+      const sum = (n / 2) * (2 * a + (n - 1) * d);
       return {
-        signature: `6.2-pyth:${base}:${ladder}`,
+        signature: `6.2-ap:${a}:${d}:${n}`,
         question: {
           id: `gen-6.2-${idSuffix}`,
           chapterId: 6,
           topicId: '6.2',
-          topicTitle: 'Right-angled triangles',
-          tier: 'Core',
-          paperType: 'Calculator',
-          marks: 2,
-          sourceRef: 'Paper 3 Calc · Topic 6.2',
-          question: `A ladder of length $${ladder}\\text{ m}$ leans against a vertical wall with its foot $${base}\\text{ m}$ from the base of the wall. How high up the wall does it reach (in metres)?`,
+          topicTitle: 'Arithmetic Progressions',
+          paperModule: 'P1',
+          paperType: 'Pure Mathematics 1',
+          marks: 4,
+          sourceRef: '9709 P1 Syllabus 6.2',
+          question: `In an arithmetic progression, the $3$rd term is $${u3}$ and the $7$th term is $${u7}$. Find the sum of the first $${n}$ terms, $S_{${n}}$.`,
           questionType: 'numeric',
-          correctAnswer: String(height),
-          numericAnswer: height,
-          tolerance: 0.01,
-          unit: 'm',
+          correctAnswer: String(sum),
+          acceptedAnswers: [String(sum)],
+          numericAnswer: sum,
+          tolerance: 0,
           markScheme: [
-            { code: 'M1', detail: `$\\sqrt{${ladder}^2 - ${base}^2}$` },
-            { code: 'A1', detail: `$${height}\\text{ m}$` },
+            { code: 'M1', detail: `Subtract equations: $(a + 6d) - (a + 2d) = ${u7 - u3} \\implies 4d = ${4 * d}$` },
+            { code: 'A1', detail: `$d = ${d}$ and $a = ${u3} - 2(${d}) = ${a}$` },
+            { code: 'M1', detail: `Apply $S_{${n}} = \\frac{${n}}{2}\\left[2(${a}) + ${n - 1}(${d})\\right]$` },
+            { code: 'A1', detail: `$S_{${n}} = ${sum}$` },
           ],
-          fullSolution: `By Pythagoras' theorem, height $= \\sqrt{${ladder}^2 - ${base}^2} = \\sqrt{${(ladder * ladder - base * base).toFixed(2)}} = ${height}\\text{ m}$.`,
+          fullSolution: `$u_7 - u_3 = 4d = ${u7 - u3} \\implies d = ${d}$, and $a = ${u3} - 2(${d}) = ${a}$. Hence $S_{${n}} = \\frac{${n}}{2}(${2 * a} + ${(n - 1) * d}) = ${sum}$.`,
         },
       };
     },
   },
-
-  // 6.5 Cosine rule (Numeric - Extended Calc)
+  // 6.3 Geometric progression S_infinity
   {
-    key: 'ch6-cosine-rule',
+    key: 'ch6-gp-infinity',
     chapterId: 6,
-    topicId: '6.5',
-    tier: 'Extended',
-    paperType: 'Calculator',
+    topicId: '6.3',
+    group: 'algebra',
     build: (rng, idSuffix) => {
-      const a = randInt(rng, 5, 10);
-      const b = randInt(rng, 7, 13);
-      const cSq = a * a + b * b - a * b;
-      const c = Number(Math.sqrt(cSq).toPrecision(3));
+      // Pick r = p/q with |r|<1 and a divisible by (q - p)*q so both u2 and S_inf are integers!
+      const [p, q] = pick(rng, [
+        [1, 3],
+        [2, 3],
+        [1, 4],
+        [3, 4],
+        [2, 5],
+      ] as const);
+      const mult = randInt(rng, 2, 5);
+      const a = q * (q - p) * mult;
+      const u2 = (a * p) / q;
+      const sInf = (a * q) / (q - p);
       return {
-        signature: `6.5-cos:${a}:${b}`,
+        signature: `6.3-sinf:${p}:${q}:${mult}`,
         question: {
-          id: `gen-6.5-${idSuffix}`,
+          id: `gen-6.3-${idSuffix}`,
           chapterId: 6,
-          topicId: '6.5',
-          topicTitle: 'Non-right-angled triangles',
-          tier: 'Extended',
-          paperType: 'Calculator',
-          marks: 3,
-          sourceRef: 'Paper 4 Calc · Topic 6.5',
-          question: `In $\\triangle ABC$, $a = ${a}\\text{ cm}$, $b = ${b}\\text{ cm}$, and $\\angle C = 60^\\circ$. Calculate side $c$ to $3$ significant figures.`,
+          topicId: '6.3',
+          topicTitle: 'Geometric Progressions & Sum to Infinity',
+          paperModule: 'P1',
+          paperType: 'Pure Mathematics 1',
+          marks: 4,
+          sourceRef: '9709 P1 Syllabus 6.3',
+          question: `A geometric progression has first term $a = ${a}$ and second term $u_2 = ${u2}$. Find the sum to infinity, $S_\\infty$.`,
           questionType: 'numeric',
-          correctAnswer: String(c),
-          numericAnswer: c,
-          tolerance: 0.03,
-          unit: 'cm',
+          correctAnswer: String(sInf),
+          acceptedAnswers: [String(sInf)],
+          numericAnswer: sInf,
+          tolerance: 0,
           markScheme: [
-            { code: 'M1', detail: `$c^2 = ${a}^2 + ${b}^2 - 2(${a})(${b})\\cos 60^\\circ$` },
-            { code: 'A1', detail: `$c^2 = ${cSq}$` },
-            { code: 'A1', detail: `$c = \\sqrt{${cSq}} \\approx ${c}\\text{ cm}$` },
+            { code: 'M1', detail: `Find common ratio $r = \\frac{u_2}{a} = \\frac{${u2}}{${a}} = \\frac{${p}}{${q}}$` },
+            { code: 'B1', detail: `Verify $|r| = \\frac{${p}}{${q}} < 1$ so $S_\\infty$ exists` },
+            { code: 'M1', detail: `Use $S_\\infty = \\frac{a}{1 - r} = \\frac{${a}}{1 - ${p}/${q}}$` },
+            { code: 'A1', detail: `$S_\\infty = ${sInf}$` },
           ],
-          fullSolution: `Using the cosine rule with $\\cos 60^\\circ = 0.5$: $c^2 = ${a * a} + ${b * b} - ${a * b} = ${cSq}$, giving $c \\approx ${c}\\text{ cm}$.`,
+          fullSolution: `$r = \\frac{${u2}}{${a}} = \\frac{${p}}{${q}}$. Since $|r| < 1$, $S_\\infty = \\frac{${a}}{1 - \\frac{${p}}{${q}}} = \\frac{${a}}{\\frac{${q - p}}{${q}}} = ${sInf}$.`,
         },
       };
     },
   },
-
-  // 7.3 Vector magnitude (Numeric - Extended Non-Calc)
+  // 7.1 Chain rule differentiation at a point
   {
-    key: 'ch7-vector-mag',
+    key: 'ch7-chain-rule-grad',
+    chapterId: 7,
+    topicId: '7.1',
+    group: 'calculus',
+    build: (rng, idSuffix) => {
+      const k = pick(rng, [2, 3, 4]);
+      const a = pick(rng, [2, 3]);
+      const x0 = pick(rng, [1, 2, 3]);
+      // y = k * (a*x - c)^3 or k / sqrt(ax + b) -> clean integer with y = k (ax - c)^3 where c = a*x0 - d
+      const innerVal = pick(rng, [1, 2, -1]);
+      const c = innerVal - a * x0; // so a*x0 + c = innerVal
+      const n = pick(rng, [3, 4]);
+      const grad = k * n * a * innerVal ** (n - 1);
+      return {
+        signature: `7.1-chain:${k}:${a}:${c}:${n}:${x0}`,
+        question: {
+          id: `gen-7.1-${idSuffix}`,
+          chapterId: 7,
+          topicId: '7.1',
+          topicTitle: 'Differentiation of Power Functions & Chain Rule',
+          paperModule: 'P1',
+          paperType: 'Pure Mathematics 1',
+          marks: 3,
+          sourceRef: '9709 P1 Syllabus 7.1',
+          question: `A curve has equation $y = ${k}(${a}x ${fmtSigned(c)})^{${n}}$. Find the gradient $\\frac{dy}{dx}$ at the point where $x = ${x0}$.`,
+          questionType: 'numeric',
+          correctAnswer: String(grad),
+          acceptedAnswers: [String(grad)],
+          numericAnswer: grad,
+          tolerance: 0,
+          markScheme: [
+            { code: 'M1', detail: `Apply chain rule: $\\frac{dy}{dx} = ${k * n}(${a}x ${fmtSigned(c)})^{${n - 1}} \\times ${a}$` },
+            { code: 'A1', detail: `Simplified derivative $${k * n * a}(${a}x ${fmtSigned(c)})^{${n - 1}}$` },
+            { code: 'A1', detail: `At $x = ${x0}$, $\\frac{dy}{dx} = ${grad}$` },
+          ],
+          fullSolution: `$\\frac{dy}{dx} = ${k} \\cdot ${n}(${a}x ${fmtSigned(c)})^{${n - 1}} \\cdot ${a} = ${k * n * a}(${a}x ${fmtSigned(c)})^{${n - 1}}$. Substituting $x = ${x0}$ gives ${k * n * a}(${innerVal})^{${n - 1}} = ${grad}$.`,
+        },
+      };
+    },
+  },
+  // 7.2 Normal gradient & y-intercept
+  {
+    key: 'ch7-normal-line',
+    chapterId: 7,
+    topicId: '7.2',
+    group: 'calculus',
+    build: (rng, idSuffix) => {
+      // Curve y = x^2 - b x + c at x = x0 where tangent gradient m_T is non-zero clean factor of 2 or 4
+      // Let y = (1/2)x^2 ... better: y = x^3 - k x at x = 1, dy/dx = 3 - k. Pick k = 1 -> m_T = 2, or k = 2 -> m_T = 1.
+      const x0 = pick(rng, [1, 2]);
+      const c = randInt(rng, 2, 7);
+      // Use y = x^2 + b x + c -> dy/dx = 2 x + b. Force m_T = +/-1 or +/-2 so normal gradient is clean!
+      const mT = pick(rng, [1, -1, 2, -2]);
+      const b = mT - 2 * x0;
+      const y0 = x0 * x0 + b * x0 + c;
+      const mN = -1 / mT;
+      // Normal: y - y0 = mN (x - x0) -> at x = 0: y_int = y0 - mN * x0
+      const num = y0 * mT + x0; // y0 - (-1/mT)*x0 = (y0*mT + x0)/mT
+      const ansStr = formatFraction(num, mT);
+      const numAns = num / mT;
+      return {
+        signature: `7.2-norm:${x0}:${mT}:${c}`,
+        question: {
+          id: `gen-7.2-${idSuffix}`,
+          chapterId: 7,
+          topicId: '7.2',
+          topicTitle: 'Tangents, Normals & Rates of Change',
+          paperModule: 'P1',
+          paperType: 'Pure Mathematics 1',
+          marks: 4,
+          sourceRef: '9709 P1 Syllabus 7.2',
+          question: `Find the $y$-intercept of the normal to the curve $y = x^2 ${fmtSigned(b, 'x')} + ${c}$ at the point where $x = ${x0}$. Give your answer as an exact integer or fraction ($a/b$).`,
+          questionType: 'numeric',
+          correctAnswer: ansStr,
+          acceptedAnswers: [ansStr, String(numAns)],
+          numericAnswer: numAns,
+          tolerance: 0.005,
+          markScheme: [
+            { code: 'B1', detail: `When $x = ${x0}$, $y = ${y0}$` },
+            { code: 'M1', detail: `$\\frac{dy}{dx} = 2x ${fmtSigned(b)}$, so tangent gradient at $x = ${x0}$ is $m_T = ${mT}$` },
+            { code: 'M1', detail: `Normal gradient $m_N = -\\frac{1}{${mT}} = ${mN}$; line $y - ${y0} = ${formatFraction(-1, mT)}(x - ${x0})$` },
+            { code: 'A1', detail: `$y$-intercept $= ${ansStr}$` },
+          ],
+          fullSolution: `At $x = ${x0}$, $y = ${y0}$ and $\\frac{dy}{dx} = 2(${x0}) ${fmtSigned(b)} = ${mT}$. The normal has gradient $m_N = ${formatFraction(-1, mT)}$, so $y = ${formatFraction(-1, mT)}(0 - ${x0}) + ${y0} = ${ansStr}$.`,
+        },
+      };
+    },
+  },
+  // 7.3 Stationary point classification & value
+  {
+    key: 'ch7-stationary-point',
     chapterId: 7,
     topicId: '7.3',
-    tier: 'Extended',
-    paperType: 'Non-Calculator',
+    group: 'calculus',
     build: (rng, idSuffix) => {
-      const triples: Array<[number, number, number]> = [
-        [3, -4, 5],
-        [-6, 8, 10],
-        [9, -12, 15],
-        [-5, 12, 13],
-        [8, -15, 17],
-        [12, -16, 20],
-      ];
-      const [vx, vy, mag] = pick(rng, triples);
+      // y = x^3 - 3 a^2 x + d -> dy/dx = 3(x^2 - a^2) -> stationary at x = a (local min) and x = -a (local max)
+      const a = pick(rng, [1, 2, 3]);
+      const d = randInt(rng, 2, 10);
+      const askMin = pick(rng, [true, false]);
+      const xStat = askMin ? a : -a;
+      const yStat = xStat ** 3 - 3 * a * a * xStat + d;
+      const nature = askMin ? 'minimum' : 'maximum';
       return {
-        signature: `7.3-vec:${vx}:${vy}`,
+        signature: `7.3-stat:${a}:${d}:${askMin ? 1 : 0}`,
         question: {
           id: `gen-7.3-${idSuffix}`,
           chapterId: 7,
           topicId: '7.3',
-          topicTitle: 'Magnitude of a vector',
-          tier: 'Extended',
-          paperType: 'Non-Calculator',
-          marks: 2,
-          sourceRef: 'Paper 2 Non-Calc · Topic 7.3',
-          question: `Vector $\\mathbf{v} = \\begin{pmatrix} ${vx} \\\\ ${vy} \\end{pmatrix}$. Calculate $|\\mathbf{v}|$.`,
+          topicTitle: 'Stationary Points & Second Derivatives',
+          paperModule: 'P1',
+          paperType: 'Pure Mathematics 1',
+          marks: 4,
+          sourceRef: '9709 P1 Syllabus 7.3',
+          question: `A curve has equation $y = x^3 - ${3 * a * a}x + ${d}$. Find the $y$-coordinate of the local ${nature} stationary point.`,
           questionType: 'numeric',
-          correctAnswer: String(mag),
-          numericAnswer: mag,
+          correctAnswer: String(yStat),
+          acceptedAnswers: [String(yStat)],
+          numericAnswer: yStat,
           tolerance: 0,
           markScheme: [
-            { code: 'M1', detail: `$\\sqrt{(${vx})^2 + (${vy})^2} = \\sqrt{${mag * mag}}$` },
-            { code: 'A1', detail: `$${mag}$` },
+            { code: 'M1', detail: `Differentiate and set $\\frac{dy}{dx} = 3x^2 - ${3 * a * a} = 0$` },
+            { code: 'A1', detail: `Stationary $x$-values $x = ${a}$ and $x = ${-a}$` },
+            { code: 'M1', detail: `Check $\\frac{d^2y}{dx^2} = 6x$ to select local ${nature} at $x = ${xStat}$` },
+            { code: 'A1', detail: `$y = ${yStat}$` },
           ],
-          fullSolution: `Magnitude $|\\mathbf{v}| = \\sqrt{(${vx})^2 + (${vy})^2} = \\sqrt{${vx * vx} + ${vy * vy}} = \\sqrt{${mag * mag}} = ${mag}$.`,
+          fullSolution: `$\\frac{dy}{dx} = 3x^2 - ${3 * a * a} = 0 \\implies x = \\pm ${a}$. Since $\\frac{d^2y}{dx^2} = 6x$, $x = ${xStat}$ gives $\\frac{d^2y}{dx^2} = ${6 * xStat} ${askMin ? '> 0\\text{ (min)}' : '< 0\\text{ (max)}'}$. Substituting $x = ${xStat}$ yields $y = (${xStat})^3 - ${3 * a * a}(${xStat}) + ${d} = ${yStat}$.`,
         },
       };
     },
   },
-
-  // 8.3 Probability with replacement (Text fraction/decimal - Core Non-Calc)
+  // 8.1 Recovering curve equation f(x) from f'(x)
   {
-    key: 'ch8-prob-replace',
+    key: 'ch8-curve-from-grad',
+    chapterId: 8,
+    topicId: '8.1',
+    group: 'calculus',
+    build: (rng, idSuffix) => {
+      // dy/dx = a x^2 + b, passes through (1, y1), find y at x = 2
+      const k = pick(rng, [3, 6, 9]); // multiple of 3 for clean x^3 term
+      const b = pick(rng, [-4, -2, 2, 4]);
+      const c = randInt(rng, -3, 6);
+      const yAt1 = (k / 3) * 1 + b * 1 + c;
+      const yAt2 = (k / 3) * 8 + b * 2 + c;
+      return {
+        signature: `8.1-curve:${k}:${b}:${c}`,
+        question: {
+          id: `gen-8.1-${idSuffix}`,
+          chapterId: 8,
+          topicId: '8.1',
+          topicTitle: 'Indefinite Integration & Finding Constant c',
+          paperModule: 'P1',
+          paperType: 'Pure Mathematics 1',
+          marks: 4,
+          sourceRef: '9709 P1 Syllabus 8.1',
+          question: `A curve has gradient $\\frac{dy}{dx} = ${k}x^2 ${fmtSigned(b)}$ and passes through the point $(1, ${yAt1})$. Find the $y$-coordinate on the curve when $x = 2$.`,
+          questionType: 'numeric',
+          correctAnswer: String(yAt2),
+          acceptedAnswers: [String(yAt2)],
+          numericAnswer: yAt2,
+          tolerance: 0,
+          markScheme: [
+            { code: 'M1', detail: `Integrate: $y = ${k / 3 === 1 ? '' : k / 3}x^3 ${fmtSigned(b, 'x')} + c$` },
+            { code: 'M1', detail: `Substitute $(1, ${yAt1})$ to find $c$` },
+            { code: 'A1', detail: `$c = ${c}$` },
+            { code: 'A1', detail: `At $x = 2$, $y = ${yAt2}$` },
+          ],
+          fullSolution: `Integrating gives $y = ${k / 3 === 1 ? '' : k / 3}x^3 ${fmtSigned(b, 'x')} + c$. At $(1, ${yAt1})$, $${k / 3} ${fmtSigned(b)} + c = ${yAt1} \\implies c = ${c}$. Setting $x = 2$ gives $y = ${k / 3}(8) ${fmtSigned(b * 2)} + ${c} = ${yAt2}$.`,
+        },
+      };
+    },
+  },
+  // 8.2 Definite integral / area under curve
+  {
+    key: 'ch8-definite-area',
+    chapterId: 8,
+    topicId: '8.2',
+    group: 'calculus',
+    build: (rng, idSuffix) => {
+      // Area between y = k x (b - x) and x-axis from 0 to b -> integral = k (b*x^2/2 - x^3/3)_0^b = k b^3 / 6
+      const b = pick(rng, [3, 6]); // divisible by 3 and 6 works cleanly
+      const k = pick(rng, [1, 2, 3]);
+      const area = (k * b ** 3) / 6;
+      const expr = k === 1 ? `${b}x - x^2` : `${k * b}x - ${k}x^2`;
+      return {
+        signature: `8.2-area:${k}:${b}`,
+        question: {
+          id: `gen-8.2-${idSuffix}`,
+          chapterId: 8,
+          topicId: '8.2',
+          topicTitle: 'Definite Integrals & Areas Between Curves',
+          paperModule: 'P1',
+          paperType: 'Pure Mathematics 1',
+          marks: 4,
+          sourceRef: '9709 P1 Syllabus 8.2',
+          question: `Find the exact area of the finite region bounded by the curve $y = ${expr}$ and the $x$-axis.`,
+          questionType: 'numeric',
+          correctAnswer: String(area),
+          acceptedAnswers: [String(area)],
+          numericAnswer: area,
+          tolerance: 0,
+          markScheme: [
+            { code: 'B1', detail: `Roots on $x$-axis at $x = 0$ and $x = ${b}$` },
+            { code: 'M1', detail: `Integrate $\\int_0^{${b}} (${expr})\\,dx = \\left[${formatFraction(k * b, 2)}x^2 - ${formatFraction(k, 3)}x^3\\right]_0^{${b}}$` },
+            { code: 'M1', detail: `Evaluate upper limit minus lower limit` },
+            { code: 'A1', detail: `Area $= ${area}$` },
+          ],
+          fullSolution: `$y = 0 \\implies x(${expr.includes('x^2') ? `${k === 1 ? b : k * b} - ${k === 1 ? '' : k}x` : ''}) = 0$, giving $x = 0$ and $x = ${b}$. Integrating from $0$ to $${b}$ gives $\\left[${formatFraction(k * b, 2)}x^2 - ${formatFraction(k, 3)}x^3\\right]_0^{${b}} = ${area}$.`,
+        },
+      };
+    },
+  },
+  // 8.3 Volume of revolution about x-axis
+  {
+    key: 'ch8-volume-rev',
     chapterId: 8,
     topicId: '8.3',
-    tier: 'Core',
-    paperType: 'Non-Calculator',
+    group: 'calculus',
     build: (rng, idSuffix) => {
-      const pairs: Array<[number, number]> = [
-        [3, 7],
-        [4, 6],
-        [2, 8],
-        [3, 5],
-        [5, 5],
-        [2, 3],
-      ];
-      const [green, yellow] = pick(rng, pairs);
-      const total = green + yellow;
-      const fracAns = formatFraction(green * green, total * total);
-      const dec = Number(((green / total) ** 2).toFixed(4));
+      // Rotate y = k * sqrt(x) from x = 0 to x = b -> pi * int_0^b k^2 x dx = pi * k^2 * b^2 / 2
+      const k = pick(rng, [1, 2, 3]);
+      const b = pick(rng, [2, 4, 6]);
+      const piCoeff = (k * k * b * b) / 2;
+      const expr = k === 1 ? '\\sqrt{x}' : `${k}\\sqrt{x}`;
       return {
-        signature: `8.3-rep:${green}:${yellow}`,
+        signature: `8.3-vol:${k}:${b}`,
         question: {
           id: `gen-8.3-${idSuffix}`,
           chapterId: 8,
           topicId: '8.3',
-          topicTitle: 'Probability of combined events',
-          tier: 'Core',
-          paperType: 'Non-Calculator',
-          marks: 3,
-          sourceRef: 'Paper 1 Non-Calc · Topic 8.3',
-          question: `A bag contains $${green}$ green and $${yellow}$ yellow counters. Two counters are picked WITH replacement. What is the probability that BOTH are green? (Enter as a simplified fraction a/b or exact decimal)`,
-          questionType: 'text',
-          correctAnswer: fracAns,
-          acceptedAnswers: [fracAns, String(dec)],
-          numericAnswer: dec,
-          tolerance: 0.001,
-          markScheme: [
-            { code: 'M1', detail: `$P(\\text{Green}) = \\frac{${green}}{${total}}$` },
-            { code: 'M1', detail: `$\\frac{${green}}{${total}} \\times \\frac{${green}}{${total}}$` },
-            { code: 'A1', detail: `$\\frac{${fracAns.split('/')[0]}}{${fracAns.split('/')[1] || 1}}$` },
-          ],
-          fullSolution: `Because the first counter is replaced, both draws have probability $\\frac{${green}}{${total}}$. Multiply: $\\left(\\frac{${green}}{${total}}\\right)^2 = ${fracAns}$.`,
-        },
-      };
-    },
-  },
-
-  // 8.4 Conditional probability without replacement (Text - Extended Calc)
-  {
-    key: 'ch8-prob-conditional',
-    chapterId: 8,
-    topicId: '8.4',
-    tier: 'Extended',
-    paperType: 'Calculator',
-    build: (rng, idSuffix) => {
-      const red = randInt(rng, 4, 7);
-      const blue = randInt(rng, 3, 6);
-      const total = red + blue;
-      const ans = formatFraction(red * (red - 1), total * (total - 1));
-      const dec = (red * (red - 1)) / (total * (total - 1));
-      return {
-        signature: `8.4-cond:${red}:${blue}`,
-        question: {
-          id: `gen-8.4-${idSuffix}`,
-          chapterId: 8,
-          topicId: '8.4',
-          topicTitle: 'Conditional probability',
-          tier: 'Extended',
-          paperType: 'Calculator',
-          marks: 3,
-          sourceRef: 'Paper 4 Calc · Topic 8.4',
-          question: `A box holds $${red}$ red and $${blue}$ blue beads. Two beads are taken at random WITHOUT replacement. Find the probability that both beads are red (enter as a simplified fraction a/b).`,
-          questionType: 'text',
-          correctAnswer: ans,
-          acceptedAnswers: [ans],
-          numericAnswer: dec,
-          tolerance: 0.0005,
-          markScheme: [
-            { code: 'M1', detail: `$\\frac{${red}}{${total}} \\times \\frac{${red - 1}}{${total - 1}}$` },
-            { code: 'A1', detail: `$${ans}$` },
-          ],
-          fullSolution: `On the first draw $P(\\text{Red}) = \\frac{${red}}{${total}}$. Without replacement, there are $${red - 1}$ red left out of $${total - 1}$: $\\frac{${red}}{${total}} \\times \\frac{${red - 1}}{${total - 1}} = ${ans}$.`,
-        },
-      };
-    },
-  },
-
-  // 9.3 Reverse mean (Numeric - Core Non-Calc)
-  {
-    key: 'ch9-mean-reverse',
-    chapterId: 9,
-    topicId: '9.3',
-    tier: 'Core',
-    paperType: 'Non-Calculator',
-    build: (rng, idSuffix) => {
-      const mean = randInt(rng, 12, 22);
-      const n1 = mean - randInt(rng, 2, 5);
-      const n2 = mean - 1;
-      const n3 = mean + randInt(rng, 2, 5);
-      const missing = mean * 4 - (n1 + n2 + n3);
-      return {
-        signature: `9.3-mean:${mean}:${n1}:${n2}:${n3}`,
-        question: {
-          id: `gen-9.3-${idSuffix}`,
-          chapterId: 9,
-          topicId: '9.3',
-          topicTitle: 'Averages and measures of spread',
-          tier: 'Core',
-          paperType: 'Non-Calculator',
-          marks: 2,
-          sourceRef: 'Paper 1 Non-Calc · Topic 9.3',
-          question: `The mean of $4$ numbers is $${mean}$. Three of the numbers are $${n1}$, $${n2}$, and $${n3}$. What is the fourth number?`,
+          topicTitle: 'Volumes of Revolution & Improper Integrals',
+          paperModule: 'P1',
+          paperType: 'Pure Mathematics 1',
+          marks: 4,
+          sourceRef: '9709 P1 Syllabus 8.3',
+          question: `The region under $y = ${expr}$ between $x = 0$ and $x = ${b}$ is rotated $360^\\circ$ about the $x$-axis. If the exact volume is $V = k\\pi$, find the integer value of $k$.`,
           questionType: 'numeric',
-          correctAnswer: String(missing),
-          numericAnswer: missing,
+          correctAnswer: String(piCoeff),
+          acceptedAnswers: [String(piCoeff)],
+          numericAnswer: piCoeff,
           tolerance: 0,
           markScheme: [
-            { code: 'M1', detail: `Total sum $= 4 \\times ${mean} = ${4 * mean}$` },
-            { code: 'A1', detail: `$${4 * mean} - (${n1} + ${n2} + ${n3}) = ${missing}$` },
+            { code: 'M1', detail: `Use $V = \\pi \\int_0^{${b}} y^2\\,dx = \\pi \\int_0^{${b}} ${k * k}x\\,dx$` },
+            { code: 'A1', detail: `Antiderivative $\\pi \\left[${formatFraction(k * k, 2)}x^2\\right]_0^{${b}}$` },
+            { code: 'M1', detail: `Substitute limits $x = ${b}$ and $x = 0$` },
+            { code: 'A1', detail: `$V = ${piCoeff}\\pi$, so $k = ${piCoeff}$` },
           ],
-          fullSolution: `The total of all $4$ numbers is $4 \\times ${mean} = ${4 * mean}$. Subtract the known three ($${n1 + n2 + n3}$) to obtain $${missing}$.`,
-        },
-      };
-    },
-  },
-
-  // 9.4 Pie chart angle (MCQ - Core Calc)
-  {
-    key: 'ch9-pie-mcq',
-    chapterId: 9,
-    topicId: '9.4',
-    tier: 'Core',
-    paperType: 'Calculator',
-    build: (rng, idSuffix) => {
-      const totals: Array<[number, number]> = [
-        [90, 4],
-        [72, 5],
-        [60, 6],
-        [45, 8],
-        [40, 9],
-        [36, 10],
-      ];
-      const [total, degPerItem] = pick(rng, totals);
-      const freq = randInt(rng, 7, Math.floor(total / 2));
-      const angle = freq * degPerItem;
-      const options = buildUniqueMcqOptions(rng, `${angle}°`, [
-        `${Math.round((freq / total) * 100)}°`,
-        `${angle + degPerItem * 2}°`,
-        `${360 - angle}°`,
-      ]);
-      return {
-        signature: `9.4-pie:${total}:${freq}`,
-        question: {
-          id: `gen-9.4-${idSuffix}`,
-          chapterId: 9,
-          topicId: '9.4',
-          topicTitle: 'Statistical charts and diagrams',
-          tier: 'Core',
-          paperType: 'Calculator',
-          marks: 2,
-          sourceRef: 'Paper 3 Calc · Topic 9.4',
-          question: `A survey records $${total}$ students in total, and $${freq}$ of them travel by bus. What sector angle represents bus travel on a pie chart?`,
-          questionType: 'mcq',
-          options,
-          correctAnswer: `${angle}°`,
-          markScheme: [
-            { code: 'M1', detail: `$\\frac{${freq}}{${total}} \\times 360^\\circ$` },
-            { code: 'A1', detail: `$${angle}^\\circ$` },
-          ],
-          fullSolution: `Each student corresponds to $\\frac{360^\\circ}{${total}} = ${degPerItem}^\\circ$. Multiply by $${freq}$ to get $${angle}^\\circ$.`,
-        },
-      };
-    },
-  },
-
-  // 9.7 Histograms frequency density (Numeric - Extended Calc)
-  {
-    key: 'ch9-histogram-fd',
-    chapterId: 9,
-    topicId: '9.7',
-    tier: 'Extended',
-    paperType: 'Calculator',
-    build: (rng, idSuffix) => {
-      const start = pick(rng, [20, 30, 40, 50]);
-      const width = pick(rng, [10, 15, 20, 25]);
-      const end = start + width;
-      const fd = pick(rng, [1.4, 1.6, 1.8, 2.2, 2.4, 2.8, 3.2, 3.6]);
-      const freq = Math.round(fd * width);
-      const exactFd = Number((freq / width).toFixed(2));
-      return {
-        signature: `9.7-fd:${start}:${width}:${freq}`,
-        question: {
-          id: `gen-9.7-${idSuffix}`,
-          chapterId: 9,
-          topicId: '9.7',
-          topicTitle: 'Histograms',
-          tier: 'Extended',
-          paperType: 'Calculator',
-          marks: 2,
-          sourceRef: 'Paper 4 Calc · Topic 9.7',
-          question: `In a histogram, the class interval $${start} < w \\le ${end}$ contains $${freq}$ items. Calculate the frequency density of this bar.`,
-          questionType: 'numeric',
-          correctAnswer: String(exactFd),
-          numericAnswer: exactFd,
-          tolerance: 0.01,
-          markScheme: [
-            { code: 'M1', detail: `Class width $= ${end} - ${start} = ${width}$; $\\text{FD} = ${freq} \\div ${width}$` },
-            { code: 'A1', detail: `$${exactFd}$` },
-          ],
-          fullSolution: `Class width $= ${end} - ${start} = ${width}$. Frequency density $= \\frac{${freq}}{${width}} = ${exactFd}$.`,
+          fullSolution: `$V = \\pi \\int_0^{${b}} (${expr})^2\\,dx = \\pi \\int_0^{${b}} ${k * k}x\\,dx = \\pi\\left[\\frac{${k * k}}{2}x^2\\right]_0^{${b}} = ${piCoeff}\\pi$, giving $k = ${piCoeff}$.`,
         },
       };
     },
@@ -1486,14 +1039,10 @@ const TEMPLATES: TemplateDef[] = [
 
 function selectMatchingTemplates(options: MockGenerationOptions): TemplateDef[] {
   switch (options.mode) {
-    case 'mock-core-p1':
-      return TEMPLATES.filter((t) => t.tier === 'Core' && t.paperType === 'Non-Calculator');
-    case 'mock-core-p3':
-      return TEMPLATES.filter((t) => t.tier === 'Core' && t.paperType === 'Calculator');
-    case 'mock-ext-p2':
-      return TEMPLATES.filter((t) => t.paperType === 'Non-Calculator');
-    case 'mock-ext-p4':
-      return TEMPLATES.filter((t) => t.paperType === 'Calculator');
+    case 'mock-p1-algebra':
+      return TEMPLATES.filter((t) => t.group === 'algebra');
+    case 'mock-p1-calculus':
+      return TEMPLATES.filter((t) => t.group === 'calculus');
     case 'topical': {
       if (options.topicId) {
         const exact = TEMPLATES.filter((t) => t.topicId === options.topicId);
@@ -1508,7 +1057,7 @@ function selectMatchingTemplates(options: MockGenerationOptions): TemplateDef[] 
       }
       return TEMPLATES;
     }
-    case 'mock-full':
+    case 'mock-p1-full':
     default:
       return TEMPLATES;
   }
@@ -1521,13 +1070,12 @@ export function generateMockExamQuestions(
   const seedKey = `${options.mode}|${options.chapterId ?? 'all'}|${options.topicId ?? ''}|attempt:${options.attemptNumber}`;
   const rng = createRng(hashSeed(seedKey));
 
-  // Target counts balanced by mode and diversity of question types
   const desiredCount =
-    options.mode === 'mock-full'
-      ? 12
+    options.mode === 'mock-p1-full'
+      ? 10
       : options.mode === 'topical'
-        ? Math.max(4, Math.min(8, pool.length * 2))
-        : 8;
+        ? Math.max(4, Math.min(6, pool.length * 2))
+        : 6;
 
   const orderedTemplates: TemplateDef[] = [];
   let roundPool = shuffle(rng, pool);
@@ -1539,10 +1087,9 @@ export function generateMockExamQuestions(
     if (nextTpl) orderedTemplates.push(nextTpl);
   }
 
-  // Ensure multi-type representation whenever pool supports MCQ + numeric/text
-  const hasMcqInPool = pool.some((t) => t.key.includes('mcq'));
-  if (hasMcqInPool && !orderedTemplates.some((t) => t.key.includes('mcq'))) {
-    const mcqTpl = pool.find((t) => t.key.includes('mcq'));
+  const hasMcqInPool = pool.some((t) => t.isMcq);
+  if (hasMcqInPool && !orderedTemplates.some((t) => t.isMcq)) {
+    const mcqTpl = pool.find((t) => t.isMcq);
     if (mcqTpl) orderedTemplates[orderedTemplates.length - 1] = mcqTpl;
   }
 

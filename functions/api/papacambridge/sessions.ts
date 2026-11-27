@@ -1,7 +1,7 @@
 import { fetchPapaCambridgeSessions } from '../../../src/utils/papacambridge';
 
 export async function onRequestGet(): Promise<Response> {
-  const result = await fetchPapaCambridgeSessions();
+  const result = await fetchPapaCambridgeSessions('9709');
   return new Response(JSON.stringify(result), {
     headers: {
       'Content-Type': 'application/json; charset=utf-8',

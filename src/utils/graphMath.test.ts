@@ -156,28 +156,32 @@ test('coordinate transforms and segment/polygon geometry helpers compute exact v
   assert.equal(poly.perimeter, 12);
 });
 
-import { GRAPH_PRESETS } from '../data/graphPresets';
-import { ALL_SUBTOPICS_0580 } from '../data/syllabus0580';
+import { CALCULATOR_PRESET_OPTIONS, GRAPH_PRESETS } from '../data/graphPresets';
+import { loadAllP1SyllabusChapters } from '../data/syllabus9709';
 
-test('All topical GeoGebra presets compile cleanly and cover every graph-enabled syllabus topic', () => {
+test('All 9709 GeoGebra presets compile cleanly and cover every graph-enabled P1 syllabus topic', async () => {
+  const chapters = await loadAllP1SyllabusChapters();
+  const ALL_SUBTOPICS_9709 = chapters.flatMap((c) => c.subtopics);
   for (const [id, preset] of Object.entries(GRAPH_PRESETS)) {
+    assert.equal(preset.angleUnit, 'rad', `Expected radian default on 9709 preset ${id}`);
     for (const expr of preset.expressions) {
       const parsed = parsePlotInput(expr.input);
       assert.equal(parsed.ok, true, `Preset ${id} expression "${expr.input}" failed to parse`);
     }
   }
 
-  const graphTopics = ALL_SUBTOPICS_0580.filter(
-    (t) =>
-      t.sandbox === 'geogebra-graph' ||
-      t.sandbox === 'linear-graph' ||
-      t.sandbox === 'quadratic-solver'
+  for (const opt of CALCULATOR_PRESET_OPTIONS) {
+    assert.ok(GRAPH_PRESETS[opt.id], `Calculator preset option ${opt.id} missing from GRAPH_PRESETS`);
+  }
+
+  const graphTopics = ALL_SUBTOPICS_9709.filter(
+    (t) => t.sandbox === 'geogebra-graph' || t.sandbox === 'quadratic-solver'
   );
-  assert.ok(graphTopics.length >= 18, `Expected >=18 graph-enabled topics, got ${graphTopics.length}`);
+  assert.ok(graphTopics.length >= 10, `Expected >=10 graph-enabled P1 topics, got ${graphTopics.length}`);
   for (const t of graphTopics) {
     assert.ok(
       GRAPH_PRESETS[t.id],
-      `Missing GeoGebra preset for graph-enabled syllabus topic ${t.id}`
+      `Missing GeoGebra preset for graph-enabled 9709 P1 topic ${t.id}`
     );
   }
 });

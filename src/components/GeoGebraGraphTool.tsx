@@ -23,6 +23,7 @@ import {
   getGraphPresetForTopic,
   GRAPH_PALETTE,
   type GraphPreset,
+  type GraphShadedArea,
   type GraphSliderConfig,
 } from '../data/graphPresets';
 import {
@@ -125,7 +126,13 @@ export const GeoGebraGraphTool: React.FC<GeoGebraGraphToolProps> = ({
   const [tangentEnabled, setTangentEnabled] = useState<boolean>(
     initialPreset.tangentEnabled ?? false
   );
+  const [normalEnabled, setNormalEnabled] = useState<boolean>(
+    initialPreset.normalEnabled ?? false
+  );
   const [tangentX, setTangentX] = useState<number>(initialPreset.tangentX ?? 1);
+  const [shadedArea, setShadedArea] = useState<GraphShadedArea | null>(
+    initialPreset.shadedArea ?? null
+  );
   const [animatingParam, setAnimatingParam] = useState<string | null>(null);
   const [focusedExprId, setFocusedExprId] = useState<string | null>(
     initialPreset.expressions[0]?.id ?? null
@@ -184,7 +191,9 @@ export const GeoGebraGraphTool: React.FC<GeoGebraGraphToolProps> = ({
     setSnapToGrid(preset.snapToGrid ?? true);
     setShowKeyPoints(preset.showKeyPoints ?? true);
     setTangentEnabled(preset.tangentEnabled ?? false);
+    setNormalEnabled(preset.normalEnabled ?? false);
     setTangentX(preset.tangentX ?? 1);
+    setShadedArea(preset.shadedArea ?? null);
     setAnimatingParam(null);
     setPendingStart(null);
     setFocusedExprId(preset.expressions[0]?.id ?? null);
@@ -510,6 +519,68 @@ export const GeoGebraGraphTool: React.FC<GeoGebraGraphToolProps> = ({
       ctx.restore();
     }
 
+    // Shaded Area Under / Between Curves
+    if (shadedArea) {
+      const primaryExp = compiledExpressions.find(
+        (e) => e.id === shadedArea.exprId && e.visible && e.parsed.ok && e.parsed.spec.kind === 'function'
+      );
+      const secondaryExp = shadedArea.secondExprId
+        ? compiledExpressions.find(
+            (e) =>
+              e.id === shadedArea.secondExprId &&
+              e.visible &&
+              e.parsed.ok &&
+              e.parsed.spec.kind === 'function'
+          )
+        : undefined;
+
+      if (primaryExp && primaryExp.parsed.ok) {
+        const steps = 160;
+        const x0 = Math.min(shadedArea.xMin, shadedArea.xMax);
+        const x1 = Math.max(shadedArea.xMin, shadedArea.xMax);
+        const topScreen: { sx: number; sy: number }[] = [];
+        const botScreen: { sx: number; sy: number }[] = [];
+
+        for (let i = 0; i <= steps; i += 1) {
+          const wx = x0 + (i / steps) * (x1 - x0);
+          const wy1 = primaryExp.parsed.spec.evaluate(wx, resolvedParams, angleUnit);
+          const wy2 =
+            secondaryExp && secondaryExp.parsed.ok
+              ? secondaryExp.parsed.spec.evaluate(wx, resolvedParams, angleUnit)
+              : 0;
+          if (!Number.isFinite(wy1) || !Number.isFinite(wy2)) continue;
+          topScreen.push(worldToScreen(wx, wy1, viewport, width, height));
+          botScreen.push(worldToScreen(wx, wy2, viewport, width, height));
+        }
+
+        if (topScreen.length >= 2) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(topScreen[0].sx, topScreen[0].sy);
+          for (let i = 1; i < topScreen.length; i += 1) {
+            ctx.lineTo(topScreen[i].sx, topScreen[i].sy);
+          }
+          for (let i = botScreen.length - 1; i >= 0; i -= 1) {
+            ctx.lineTo(botScreen[i].sx, botScreen[i].sy);
+          }
+          ctx.closePath();
+          ctx.fillStyle = hexToRgba(shadedArea.color, 0.22);
+          ctx.fill();
+
+          ctx.strokeStyle = hexToRgba(shadedArea.color, 0.75);
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([4, 3]);
+          ctx.beginPath();
+          ctx.moveTo(topScreen[0].sx, topScreen[0].sy);
+          ctx.lineTo(botScreen[0].sx, botScreen[0].sy);
+          ctx.moveTo(topScreen[topScreen.length - 1].sx, topScreen[topScreen.length - 1].sy);
+          ctx.lineTo(botScreen[botScreen.length - 1].sx, botScreen[botScreen.length - 1].sy);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+    }
+
     // Expressions (functions, vertical lines, inequalities)
     for (const exp of compiledExpressions) {
       if (!exp.visible || !exp.parsed.ok) continue;
@@ -630,7 +701,7 @@ export const GeoGebraGraphTool: React.FC<GeoGebraGraphToolProps> = ({
       ctx.restore();
     }
 
-    // Tangent Line overlay
+    // Tangent & Normal Line overlay
     if (tangentInfo) {
       const xA = bounds.xMin;
       const xB = bounds.xMax;
@@ -641,6 +712,25 @@ export const GeoGebraGraphTool: React.FC<GeoGebraGraphToolProps> = ({
       const p0 = worldToScreen(tangentInfo.x0, tangentInfo.y0, viewport, width, height);
 
       ctx.save();
+      if (normalEnabled) {
+        ctx.strokeStyle = '#059669';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        if (Math.abs(tangentInfo.slope) < 1e-4) {
+          ctx.moveTo(p0.sx, 0);
+          ctx.lineTo(p0.sx, height);
+        } else {
+          const nSlope = -1 / tangentInfo.slope;
+          const nIntercept = tangentInfo.y0 - nSlope * tangentInfo.x0;
+          const nA = worldToScreen(xA, nSlope * xA + nIntercept, viewport, width, height);
+          const nB = worldToScreen(xB, nSlope * xB + nIntercept, viewport, width, height);
+          ctx.moveTo(nA.sx, nA.sy);
+          ctx.lineTo(nB.sx, nB.sy);
+        }
+        ctx.stroke();
+      }
+
       ctx.strokeStyle = '#dc2626';
       ctx.lineWidth = 2;
       ctx.setLineDash([6, 4]);
@@ -771,6 +861,8 @@ export const GeoGebraGraphTool: React.FC<GeoGebraGraphToolProps> = ({
     compiledExpressions,
     resolvedParams,
     tangentInfo,
+    normalEnabled,
+    shadedArea,
     segments,
     showKeyPoints,
     analysisPoints,
@@ -1426,8 +1518,35 @@ export const GeoGebraGraphTool: React.FC<GeoGebraGraphToolProps> = ({
                       ? `+ ${formatGraphNumber(tangentInfo.intercept, 2)}`
                       : `- ${formatGraphNumber(Math.abs(tangentInfo.intercept), 2)}`}
                   </div>
+                  {normalEnabled && (
+                    <div className="text-emerald-700 font-semibold">
+                      {Math.abs(tangentInfo.slope) < 1e-4
+                        ? `Normal: x = ${formatGraphNumber(tangentInfo.x0, 2)}`
+                        : (() => {
+                            const nM = -1 / tangentInfo.slope;
+                            const nC = tangentInfo.y0 - nM * tangentInfo.x0;
+                            return `Normal: y = ${formatGraphNumber(nM, 2)}x ${
+                              nC >= 0
+                                ? `+ ${formatGraphNumber(nC, 2)}`
+                                : `- ${formatGraphNumber(Math.abs(nC), 2)}`
+                            }`;
+                          })()}
+                    </div>
+                  )}
                 </div>
               )}
+              {shadedArea?.label && (
+                <div className="text-[11px] font-mono font-semibold text-[var(--sk-pri-hover)] bg-[var(--sk-chip)] border border-[var(--sk-line)] rounded-lg px-2 py-1">
+                  {shadedArea.label}
+                </div>
+              )}
+            </div>
+          )}
+          {!tangentEnabled && shadedArea?.label && (
+            <div className="pt-2 border-t border-[var(--sk-line)]">
+              <div className="text-[11px] font-mono font-semibold text-[var(--sk-pri-hover)] bg-white border border-[var(--sk-line)] rounded-lg px-2.5 py-1.5">
+                {shadedArea.label}
+              </div>
             </div>
           )}
 

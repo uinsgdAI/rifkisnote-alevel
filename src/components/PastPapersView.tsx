@@ -21,7 +21,7 @@ import type {
   SubjectCode,
   SyllabusChapter,
 } from '../types/syllabus';
-import { findMatchingSyllabusTopics } from '../utils/examLogic';
+import { findMatchingSyllabusTopics, mapPaperNumberToModule } from '../utils/examLogic';
 import {
   generateSessionPaperFallback,
   getFallbackSessions,
@@ -73,24 +73,25 @@ const DOC_TYPE_ORDER: Record<PastPaperFile['docType'], number> = {
   OTHER: 5,
 };
 
-const QUICK_TROUBLE_TOPICS_0580 = [
-  { label: 'Polygon angles', query: 'polygon' },
-  { label: 'Statistics & averages', query: 'statistics' },
-  { label: 'Histograms', query: 'histogram' },
-  { label: 'Cumulative frequency', query: 'cumulative' },
-  { label: 'Circle theorems', query: 'circle theorem' },
+const QUICK_TROUBLE_TOPICS_9709 = [
+  { label: 'Quadratics & discriminant', query: 'discriminant' },
+  { label: 'Functions & inverses', query: 'inverse' },
+  { label: 'Circles & tangents', query: 'circle' },
+  { label: 'Circular measure', query: 'radian' },
   { label: 'Trigonometry', query: 'trigonometry' },
-  { label: 'Bearings', query: 'bearing' },
+  { label: 'Binomial & series', query: 'binomial' },
+  { label: 'Differentiation', query: 'differentiation' },
+  { label: 'Integration & volumes', query: 'volume' },
 ];
 
-const QUICK_TROUBLE_TOPICS_0606 = [
-  { label: 'Functions', query: 'functions' },
-  { label: 'Quadratic functions', query: 'quadratic' },
-  { label: 'Logarithms & exponentials', query: 'logarithmic' },
-  { label: 'Circular measure', query: 'circular' },
-  { label: 'Trigonometry', query: 'trigonometry' },
-  { label: 'Permutations & combinations', query: 'permutations' },
-  { label: 'Calculus', query: 'calculus' },
+const COMPONENT_FILTERS: ReadonlyArray<{ id: 'all' | '1' | '2' | '3' | '4' | '5' | '6'; label: string }> = [
+  { id: 'all', label: 'All Papers' },
+  { id: '1', label: 'P1 (1)' },
+  { id: '2', label: 'P2 (2)' },
+  { id: '3', label: 'P3 (3)' },
+  { id: '4', label: 'M1 (4)' },
+  { id: '5', label: 'S1 (5)' },
+  { id: '6', label: 'S2 (6)' },
 ];
 
 export const PastPapersView: React.FC<PastPapersViewProps> = ({
@@ -128,8 +129,8 @@ export const PastPapersView: React.FC<PastPapersViewProps> = ({
   const [localPdf, setLocalPdf] = useState<{ url: string; filename: string } | null>(null);
   const localFileInputRef = useRef<HTMLInputElement | null>(null);
   const viewerRef = useRef<HTMLElement | null>(null);
-  const [eraFilter, setEraFilter] = useState<'all' | '2020-2026' | '2010-2019' | '2002-2009'>('all');
-  const [paperFilter, setPaperFilter] = useState<'all' | '1' | '2' | '3' | '4'>('all');
+  const [eraFilter, setEraFilter] = useState<'all' | '2020-2026' | '2010-2019' | '2001-2009'>('all');
+  const [paperFilter, setPaperFilter] = useState<'all' | '1' | '2' | '3' | '4' | '5' | '6'>('all');
   const [docFilter, setDocFilter] = useState<'all' | 'QP' | 'MS' | 'ER' | 'GT'>('all');
   const [paperSearchQuery, setPaperSearchQuery] = useState('');
   const [activePrimaryPdf, setActivePrimaryPdf] = useState<PastPaperFile | null>(null);
@@ -137,16 +138,6 @@ export const PastPapersView: React.FC<PastPapersViewProps> = ({
   const [topicQuery, setTopicQuery] = useState('');
   const [isViewerFullscreen, setIsViewerFullscreen] = useState(false);
   const enteredNativeViewerFsRef = useRef(false);
-
-  useEffect(() => {
-    setActivePrimaryPdf(null);
-    setActiveSecondaryPdf(null);
-    setLocalPdf(null);
-    setPaperFilter('all');
-    setDocFilter('all');
-    setPaperSearchQuery('');
-    setTopicQuery('');
-  }, [subject]);
 
   useEffect(() => {
     setBackgroundWarmupPaused(true);
@@ -306,7 +297,6 @@ export const PastPapersView: React.FC<PastPapersViewProps> = ({
       return;
     }
 
-    // Show immediate fallback list while refreshing live PapaCambridge listing in the background
     const fallbackPapers = generateSessionPaperFallback(selectedSession, subject);
     setPapers(fallbackPapers);
     let cancelled = false;
@@ -366,7 +356,7 @@ export const PastPapersView: React.FC<PastPapersViewProps> = ({
     return sessions.filter((s) => {
       if (eraFilter === '2020-2026') return s.year >= 2020;
       if (eraFilter === '2010-2019') return s.year >= 2010 && s.year <= 2019;
-      return s.year >= 2002 && s.year <= 2009;
+      return s.year >= 2001 && s.year <= 2009;
     });
   }, [sessions, eraFilter]);
 
@@ -377,7 +367,7 @@ export const PastPapersView: React.FC<PastPapersViewProps> = ({
     onNavigate({ view: 'past-papers', subject, sessionSlug: slug });
   };
 
-  const handleEraChange = (era: 'all' | '2020-2026' | '2010-2019' | '2002-2009') => {
+  const handleEraChange = (era: 'all' | '2020-2026' | '2010-2019' | '2001-2009') => {
     setEraFilter(era);
     const matching =
       era === 'all'
@@ -387,7 +377,7 @@ export const PastPapersView: React.FC<PastPapersViewProps> = ({
               ? s.year >= 2020
               : era === '2010-2019'
                 ? s.year >= 2010 && s.year <= 2019
-                : s.year >= 2002 && s.year <= 2009
+                : s.year >= 2001 && s.year <= 2009
           );
     if (matching.length > 0 && !matching.some((s) => s.slug === selectedSession)) {
       handleSessionChange(matching[0].slug);
@@ -398,13 +388,14 @@ export const PastPapersView: React.FC<PastPapersViewProps> = ({
     const q = paperSearchQuery.trim().toLowerCase();
     return papers
       .filter((p) => {
+        const component = p.paperComponent || mapPaperNumberToModule(p.paperNumber);
         const okPaper = paperFilter === 'all' || p.paperNumber === paperFilter;
         const okDoc = docFilter === 'all' || p.docType === docFilter;
         const okSearch =
           !q ||
           p.filename.toLowerCase().includes(q) ||
           p.docTypeLabel.toLowerCase().includes(q) ||
-          p.tier.toLowerCase().includes(q) ||
+          component.toLowerCase().includes(q) ||
           `paper ${p.paperNumber}`.includes(q) ||
           `variant ${p.variant}`.includes(q);
         return okPaper && okDoc && okSearch;
@@ -478,47 +469,28 @@ export const PastPapersView: React.FC<PastPapersViewProps> = ({
     [weakTopicIds, allSubtopics]
   );
 
-  const quickTroubleTopics =
-    subject === '0606' ? QUICK_TROUBLE_TOPICS_0606 : QUICK_TROUBLE_TOPICS_0580;
-
-  const componentFilterOptions: ReadonlyArray<'all' | '1' | '2' | '3' | '4'> =
-    subject === '0606' ? ['all', '1', '2'] : ['all', '1', '2', '3', '4'];
-
   return (
     <main className="max-w-[1440px] mx-auto px-4 sm:px-6 py-6 space-y-6">
       {/* Header Banner */}
       <section className="p-6 sk-card flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <div className="text-xs text-[var(--sk-dim)] flex items-center gap-2 mb-1">
-            <span>
-              {subject === '0606'
-                ? 'Cambridge IGCSE Additional Mathematics (0606)'
-                : 'Cambridge IGCSE Mathematics (0580)'}
-            </span>
+            <span>Cambridge AS &amp; A Level Mathematics (9709)</span>
             <span aria-hidden="true">·</span>
             <span>PapaCambridge Archive</span>
           </div>
           <h1 className="font-display text-2xl font-bold text-[var(--sk-ink)]">
-            Past Papers, Mark Schemes &amp; Grade Thresholds
+            9709 Past Papers, Mark Schemes &amp; Grade Thresholds
           </h1>
           <p className="text-sm text-[var(--sk-body)] mt-1 max-w-2xl">
-            Browse Cambridge {subject} Question Papers, Mark Schemes, Examiner Reports, and Grade Thresholds from 2002 to 2026 via PapaCambridge, and view QP + MS side-by-side.
+            Browse all Cambridge 9709 Question Papers, Mark Schemes, Examiner Reports, and Grade Thresholds across P1, P2, P3, M1, S1, and S2 from 2001 to 2026, with side-by-side QP + MS viewing.
           </p>
         </div>
 
         <div className="text-xs text-[var(--sk-body)] sk-card-soft p-3.5 space-y-1 shrink-0">
-          <div className="font-bold text-[var(--sk-ink)]">2025–2027 Paper Structure</div>
-          {subject === '0606' ? (
-            <>
-              <div>Paper 1: Non-Calculator (2h, 80 marks · 50%)</div>
-              <div>Paper 2: Calculator (2h, 80 marks · 50%)</div>
-            </>
-          ) : (
-            <>
-              <div>Core: Paper 1 (Non-Calc, 1h 30m) · Paper 3 (Calc, 1h 30m)</div>
-              <div>Extended: Paper 2 (Non-Calc, 2h) · Paper 4 (Calc, 2h)</div>
-            </>
-          )}
+          <div className="font-bold text-[var(--sk-ink)]">Cambridge 9709 Components</div>
+          <div>Pure: Paper 1 (P1) · Paper 2 (P2) · Paper 3 (P3)</div>
+          <div>Applied: Paper 4 (M1) · Paper 5 (S1) · Paper 6 (S2)</div>
         </div>
       </section>
 
@@ -530,10 +502,10 @@ export const PastPapersView: React.FC<PastPapersViewProps> = ({
             <div role="group" aria-label="Filter archive by era" className="flex gap-1 sk-tabs">
               {(
                 [
-                  { id: 'all', label: 'All (02–26)' },
+                  { id: 'all', label: 'All (01–26)' },
                   { id: '2020-2026', label: '2020–26' },
                   { id: '2010-2019', label: '2010–19' },
-                  { id: '2002-2009', label: '2002–09' },
+                  { id: '2001-2009', label: '2001–09' },
                 ] as const
               ).map((era) => (
                 <button
@@ -573,16 +545,16 @@ export const PastPapersView: React.FC<PastPapersViewProps> = ({
 
           <div>
             <div className="text-[11px] font-semibold text-[var(--sk-dim)] mb-1">Component Paper</div>
-            <div role="group" aria-label="Filter by paper component" className="flex gap-1 sk-tabs">
-              {componentFilterOptions.map((p) => (
+            <div role="group" aria-label="Filter by paper component" className="flex flex-wrap gap-1 sk-tabs">
+              {COMPONENT_FILTERS.map((comp) => (
                 <button
-                  key={p}
+                  key={comp.id}
                   type="button"
-                  data-active={paperFilter === p}
-                  onClick={() => setPaperFilter(p)}
+                  data-active={paperFilter === comp.id}
+                  onClick={() => setPaperFilter(comp.id)}
                   className="px-2.5 py-1 text-xs font-semibold cursor-pointer whitespace-nowrap sk-tab"
                 >
-                  {p === 'all' ? 'All Papers' : `Paper ${p}`}
+                  {comp.label}
                 </button>
               ))}
             </div>
@@ -617,7 +589,7 @@ export const PastPapersView: React.FC<PastPapersViewProps> = ({
               type="search"
               value={paperSearchQuery}
               onChange={(e) => setPaperSearchQuery(e.target.value)}
-              placeholder={subject === '0606' ? 'Search file (e.g. qp_12, ms)' : 'Search file (e.g. qp_42, ms)'}
+              placeholder="Search file (e.g. 9709_s26_gt, qp_12)"
               className="w-full pl-8 pr-3 py-1.5 text-xs sk-input"
             />
           </div>
@@ -644,7 +616,7 @@ export const PastPapersView: React.FC<PastPapersViewProps> = ({
         </div>
       </section>
 
-      {/* Stuck on a Past Paper Question? Bridge directly to Topic Notes */}
+      {/* Bridge from Past Paper mistakes to P1 Topic Notes */}
       <section
         aria-label="Jump to Study Notes from Past Paper Mistakes"
         className="p-5 sk-card space-y-4"
@@ -654,19 +626,17 @@ export const PastPapersView: React.FC<PastPapersViewProps> = ({
             <div className="flex items-center gap-2">
               <BookOpen className="w-4 h-4 text-[var(--sk-pri-hover)] shrink-0" />
               <h2 className="font-display text-sm font-bold text-[var(--sk-ink)]">
-                Got a Question Wrong in This Past Paper? Jump to Its Notes
+                Got a Paper 1 Question Wrong? Jump Directly to Its Notes
               </h2>
             </div>
             <p className="text-xs text-[var(--sk-body)] mt-1">
-              {subject === '0606'
-                ? 'Type the topic you struggled with while marking (for example, functions, logarithms, circle geometry, trigonometry, or calculus) to open the matching 0606 notes or save it to your revision queue.'
-                : 'Type the topic you struggled with while marking (for example, polygon angles, statistics, histogram, or circle theorems) to open the exact 0580 notes or save it to your revision queue.'}
+              Type the Pure Mathematics 1 topic you struggled with while marking (for example, discriminant, inverse, circle, radian, binomial, or volume) to open the matching 9709 P1 notes or save it to your revision queue.
             </p>
           </div>
 
           <div className="relative w-full lg:w-96 shrink-0">
             <label htmlFor="pastpaper-topic-finder" className="sr-only">
-              Find {subject} notes for a past paper question topic
+              Find 9709 P1 notes for a past paper question topic
             </label>
             <Search className="w-4 h-4 text-[var(--sk-dim)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none z-10" />
             <input
@@ -674,19 +644,15 @@ export const PastPapersView: React.FC<PastPapersViewProps> = ({
               type="search"
               value={topicQuery}
               onChange={(e) => setTopicQuery(e.target.value)}
-              placeholder={
-                subject === '0606'
-                  ? 'What topic did you miss? (e.g. calculus, vectors)'
-                  : 'What topic did you miss? (e.g. polygon, statistics)'
-              }
+              placeholder="What P1 topic did you miss? (e.g. circle, trig)"
               className="w-full pl-9 pr-3 py-2 text-xs sk-input"
             />
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-semibold text-[var(--sk-dim)]">Common topics:</span>
-          {quickTroubleTopics.map((item) => {
+          <span className="text-[11px] font-semibold text-[var(--sk-dim)]">Common P1 topics:</span>
+          {QUICK_TROUBLE_TOPICS_9709.map((item) => {
             const active = topicQuery.trim().toLowerCase() === item.query;
             return (
               <button
@@ -709,7 +675,7 @@ export const PastPapersView: React.FC<PastPapersViewProps> = ({
           <div className="pt-2 border-t border-[var(--sk-line)]">
             {topicMatches.length === 0 ? (
               <div className="text-xs text-[var(--sk-dim)] py-2">
-                No syllabus notes matched &quot;{topicQuery}&quot;.
+                No P1 syllabus notes matched &quot;{topicQuery}&quot;.
               </div>
             ) : (
               <div className="grid md:grid-cols-2 gap-3">
@@ -1048,7 +1014,7 @@ export const PastPapersView: React.FC<PastPapersViewProps> = ({
         {loadingPapers && papers.length === 0 ? (
           <div className="p-12 flex items-center justify-center gap-3 text-sm text-[var(--sk-dim)]">
             <Loader2 className="w-4 h-4 animate-spin text-[var(--sk-pri)]" />
-            Loading {subject} papers from PapaCambridge...
+            Loading 9709 papers from PapaCambridge...
           </div>
         ) : filteredPapers.length === 0 ? (
           <div className="p-8 text-center text-sm text-[var(--sk-dim)]">
@@ -1062,7 +1028,7 @@ export const PastPapersView: React.FC<PastPapersViewProps> = ({
                   <th className="py-3 px-4">File</th>
                   <th className="py-3 px-4">Document</th>
                   <th className="py-3 px-4">Paper / Variant</th>
-                  <th className="py-3 px-4">{subject === '0606' ? 'Calculator Rule' : 'Tier'}</th>
+                  <th className="py-3 px-4">Component</th>
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
@@ -1070,6 +1036,7 @@ export const PastPapersView: React.FC<PastPapersViewProps> = ({
                 {filteredPapers.map((file) => {
                   const hasMs = file.docType === 'QP' && Boolean(findMatchingMarkScheme(file));
                   const isActiveRow = activePrimaryPdf?.filename === file.filename;
+                  const component = file.paperComponent || mapPaperNumberToModule(file.paperNumber);
                   return (
                     <tr
                       key={file.filename}
@@ -1090,26 +1057,16 @@ export const PastPapersView: React.FC<PastPapersViewProps> = ({
                             : `Paper ${file.paperNumber} · All Zones`
                           : 'Session Document'}
                       </td>
-                      <td className="py-3 px-4 text-xs">
-                        {subject === '0606' ? (
-                          <span className="text-[var(--sk-body)]">
-                            {file.paperNumber === '1'
-                              ? 'Non-Calc'
-                              : file.paperNumber === '2'
-                                ? 'Calculator'
-                                : 'Session'}
-                          </span>
-                        ) : (
-                          <span
-                            className={
-                              file.tier === 'Extended'
-                                ? 'text-[var(--sk-acc-ink)] font-semibold'
-                                : 'text-[var(--sk-body)]'
-                            }
-                          >
-                            {file.tier}
-                          </span>
-                        )}
+                      <td className="py-3 px-4 text-xs font-mono">
+                        <span
+                          className={
+                            component === 'P1'
+                              ? 'text-[var(--sk-pri-hover)] font-bold'
+                              : 'text-[var(--sk-body)] font-semibold'
+                          }
+                        >
+                          {component !== 'All' ? component : 'Session'}
+                        </span>
                       </td>
                       <td className="py-3 px-4 text-right">
                         <div className="inline-flex items-center gap-2">

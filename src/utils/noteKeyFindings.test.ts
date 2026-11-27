@@ -1,68 +1,40 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ALL_SUBTOPICS_0580 } from '../data/syllabus0580';
+import { loadAllP1SyllabusChapters } from '../data/syllabus9709';
 import { tokenizeMathText } from './mathTextParser';
 import { getKeyFindingsForNote, highlightImportantText } from './noteKeyFindings';
 
 test('tokenizeMathText parses <u>...</u> underline segments without corrupting LaTeX or bold spans', () => {
   const tokens = tokenizeMathText(
-    'State **Rotation** + <u>angle</u> + <u>direction</u> + $90^\\circ$ CW.'
+    'Apply **Chain Rule** + <u>outer derivative</u> + <u>inner derivative</u> + $2x(x^2 + 1)^3$.'
   );
-  assert.ok(tokens.some((t) => t.type === 'bold' && t.content === 'Rotation'));
-  assert.ok(tokens.some((t) => t.type === 'underline' && t.content === 'angle'));
-  assert.ok(tokens.some((t) => t.type === 'underline' && t.content === 'direction'));
-  assert.ok(tokens.some((t) => t.type === 'inline' && t.content === '90^\\circ'));
+  assert.ok(tokens.some((t) => t.type === 'bold' && t.content === 'Chain Rule'));
+  assert.ok(tokens.some((t) => t.type === 'underline' && t.content === 'outer derivative'));
+  assert.ok(tokens.some((t) => t.type === 'underline' && t.content === 'inner derivative'));
+  assert.ok(tokens.some((t) => t.type === 'inline' && t.content === '2x(x^2 + 1)^3'));
 });
 
 test('highlightImportantText underlines key exam terms outside LaTeX and avoids double-wrapping', () => {
-  const input = 'ALWAYS check <u>mirror line</u> and perpendicular bisector, never $\\text{ALWAYS} + x^2$ inside math.';
+  const input = 'ALWAYS check <u>one-one</u> and discriminant, never $\\text{ALWAYS} + x^2$ inside math.';
   const highlighted = highlightImportantText(input);
   assert.match(highlighted, /<u>ALWAYS<\/u>/);
-  assert.match(highlighted, /<u>mirror line<\/u>/);
-  assert.match(highlighted, /<u>perpendicular bisector<\/u>/);
+  assert.match(highlighted, /<u>one-one<\/u>/);
   assert.equal(highlighted.includes('<u><u>'), false);
-  // Math expression stays untouched
   assert.ok(highlighted.includes('$\\text{ALWAYS} + x^2$'));
 });
 
-test('All 72 subtopics produce structured Key Findings and 7.1 Transformations covers Translation through Rotation', () => {
-  assert.equal(ALL_SUBTOPICS_0580.length, 72);
+test('All 24 9709 P1 subtopics produce structured Key Findings and tokenize math cleanly without raw $ LaTeX', async () => {
+  const chapters = await loadAllP1SyllabusChapters();
+  const ALL_SUBTOPICS_9709 = chapters.flatMap((c) => c.subtopics);
+  assert.equal(ALL_SUBTOPICS_9709.length, 24);
 
-  for (const topic of ALL_SUBTOPICS_0580) {
+  for (const topic of ALL_SUBTOPICS_9709) {
     const findings = getKeyFindingsForNote(topic);
     assert.ok(findings.length >= 1, `Expected >=1 key finding for ${topic.id}`);
     assert.ok(
       findings.some((f) => Boolean(f.noteBox)),
       `Expected at least one boxed Note callout for ${topic.id}`
     );
-  }
-
-  const t71 = ALL_SUBTOPICS_0580.find((t) => t.id === '7.1');
-  assert.ok(t71);
-  assert.ok(t71.aims && t71.aims.length === 2);
-  assert.ok(t71.keyFindings && t71.keyFindings.length === 4);
-  const joined = t71.keyFindings.map((k) => `${k.title} ${k.finding} ${k.noteBox || ''}`).join(' ');
-  assert.match(joined, /Translation/i);
-  assert.match(joined, /Reflection/i);
-  assert.match(joined, /Enlargement/i);
-  assert.match(joined, /Rotation/i);
-  assert.match(joined, /perpendicular bisector/i);
-  assert.match(joined, /<u>.*<\/u>/);
-});
-
-test('Geometry 4.2 Example 1 title and all 72 subtopic text fields tokenize math cleanly without raw $ LaTeX', () => {
-  const t42 = ALL_SUBTOPICS_0580.find((t) => t.id === '4.2');
-  assert.ok(t42);
-  assert.ok(t42.workedExamples.length >= 1);
-  const ex1Tokens = tokenizeMathText(t42.workedExamples[0].title);
-  assert.ok(
-    ex1Tokens.some((seg) => seg.type === 'inline' && seg.content.includes('\\text{ cm}')),
-    'Expected Geometry 4.2 Example 1 title to parse measurements into inline math'
-  );
-  for (const seg of ex1Tokens) {
-    if (seg.type !== 'inline' && seg.type !== 'display') {
-      assert.equal(seg.content.includes('$'), false, `Unexpected raw $ in segment: ${seg.content}`);
-    }
   }
 
   const assertCleanField = (loc: string, val?: string) => {
@@ -88,7 +60,7 @@ test('Geometry 4.2 Example 1 title and all 72 subtopic text fields tokenize math
     }
   };
 
-  for (const note of ALL_SUBTOPICS_0580) {
+  for (const note of ALL_SUBTOPICS_9709) {
     assertCleanField(`${note.id}.title`, note.title);
     assertCleanField(`${note.id}.summary`, note.summary);
     assertCleanField(`${note.id}.bigIdea`, note.bigIdea);
@@ -131,4 +103,3 @@ test('Geometry 4.2 Example 1 title and all 72 subtopic text fields tokenize math
     note.commonMistakes.forEach((m, i) => assertCleanField(`${note.id}.mistake[${i}]`, m));
   }
 });
-

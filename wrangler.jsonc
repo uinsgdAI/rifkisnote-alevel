@@ -1,5 +1,5 @@
 {
-  "name": "rifkisnote",
+  "name": "rifkisnote-alevel",
   "main": "./src/worker.ts",
   "compatibility_date": "2025-10-01",
   "assets": {

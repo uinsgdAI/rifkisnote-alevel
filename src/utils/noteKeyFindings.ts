@@ -59,8 +59,8 @@ export function highlightImportantText(text: string): string {
 }
 
 /**
- * Produces structured "Key Findings" (Temuan Kunci) with underlined critical
- * rules and boxed "Note:" reminders for every 0580 syllabus topic.
+ * Produces structured "Key Findings" with underlined critical
+ * rules and boxed "Note:" reminders for every 9709 syllabus topic.
  */
 export function getKeyFindingsForNote(note: SubtopicNote): KeyFindingItem[] {
   if (note.keyFindings && note.keyFindings.length > 0) {

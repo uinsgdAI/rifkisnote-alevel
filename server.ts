@@ -22,18 +22,18 @@ async function startServer() {
   });
 
   app.get('/api/papacambridge/sessions', async (req, res) => {
-    const rawSubject = typeof req.query.subject === 'string' ? req.query.subject : '0580';
-    if (rawSubject !== '0580' && rawSubject !== '0606') {
+    const rawSubject = typeof req.query.subject === 'string' ? req.query.subject : '9709';
+    if (rawSubject !== '9709') {
       res.status(400).json({ error: 'Invalid subject parameter' });
       return;
     }
-    const result = await fetchPapaCambridgeSessions(rawSubject);
-    res.json({ subject: rawSubject, ...result });
+    const result = await fetchPapaCambridgeSessions('9709');
+    res.json({ subject: '9709', ...result });
   });
 
   app.get('/api/papacambridge/papers', async (req, res) => {
-    const rawSubject = typeof req.query.subject === 'string' ? req.query.subject : '0580';
-    if (rawSubject !== '0580' && rawSubject !== '0606') {
+    const rawSubject = typeof req.query.subject === 'string' ? req.query.subject : '9709';
+    if (rawSubject !== '9709') {
       res.status(400).json({ error: 'Invalid subject parameter' });
       return;
     }
@@ -42,8 +42,8 @@ async function startServer() {
       res.status(400).json({ error: 'Invalid session parameter' });
       return;
     }
-    const result = await fetchPapaCambridgePapers(session, rawSubject);
-    res.json({ subject: rawSubject, ...result });
+    const result = await fetchPapaCambridgePapers(session, '9709');
+    res.json({ subject: '9709', ...result });
   });
 
   const pdfProxyCache = new Map<
@@ -140,10 +140,10 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Cambridge 0580 Assistant listening on http://localhost:${PORT}`);
+    console.log(`Cambridge 9709 Assistant listening on http://localhost:${PORT}`);
     // Pre-warm live PapaCambridge cache non-blockingly
-    void fetchPapaCambridgeSessions();
-    void fetchPapaCambridgePapers('2024-may-june');
+    void fetchPapaCambridgeSessions('9709');
+    void fetchPapaCambridgePapers('2024-may-june', '9709');
   });
 }
 

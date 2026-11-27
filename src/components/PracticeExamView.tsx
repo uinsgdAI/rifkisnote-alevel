@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
   BookOpen,
@@ -6,12 +6,13 @@ import {
   CheckCircle2,
   Clock,
   FileSpreadsheet,
-  FileText,
+  Lock,
   Play,
   RefreshCw,
   RotateCcw,
   XCircle,
 } from 'lucide-react';
+import { PAPER_MODULES_9709 } from '../data/syllabus9709';
 import type {
   AppRoute,
   PracticeQuestion,
@@ -23,31 +24,19 @@ import {
   extractWeakTopicsFromResults,
   formatCountdown,
   gradeStudentAnswer,
-  resolvePracticeSection,
 } from '../utils/examLogic';
 import {
   generateMockExamQuestions,
   type MockPaperMode,
 } from '../utils/questionGenerator';
-import type { MockPaperMode0606 } from '../utils/questionGenerator0606';
 import { MathText } from './MathText';
 import { getActiveSubjectVfxVariant, triggerSakugaBurst } from '../utils/sakugaVfx';
-
-const TopicalPastPapersSection = lazy(() =>
-  import('./TopicalPastPapersSection').then((m) => ({
-    default: m.TopicalPastPapersSection,
-  }))
-);
-
-type CombinedPracticeMode = MockPaperMode | MockPaperMode0606;
-type Generator0606Module = typeof import('../utils/questionGenerator0606');
 
 interface PracticeExamViewProps {
   subject: SubjectCode;
   syllabus: SyllabusChapter[];
   initialMode?: string;
   initialTopicId?: string;
-  initialTopicalPackId?: string;
   navNonce?: number;
   onOpenFormulaSheet: () => void;
   onFlagWeakTopics?: (topicIds: string[]) => void;
@@ -56,10 +45,9 @@ interface PracticeExamViewProps {
 
 interface PresetMetadata {
   id: string;
-  mode: CombinedPracticeMode;
+  mode: MockPaperMode;
   title: string;
   subtitle: string;
-  tier: 'Core' | 'Extended';
   badgeLabel: string;
   durationSeconds: number;
   questionCountLabel: string;
@@ -69,10 +57,9 @@ interface PresetMetadata {
 
 interface ActiveExamSession {
   id: string;
-  mode: CombinedPracticeMode;
+  mode: MockPaperMode;
   title: string;
   subtitle: string;
-  tier: 'Core' | 'Extended';
   durationSeconds: number;
   attemptNumber: number;
   chapterId?: number | 'all';
@@ -91,13 +78,11 @@ export const PracticeExamView: React.FC<PracticeExamViewProps> = ({
   syllabus,
   initialMode,
   initialTopicId,
-  initialTopicalPackId,
   navNonce = 0,
   onOpenFormulaSheet,
   onFlagWeakTopics,
   onNavigate,
 }) => {
-  const activeSection = resolvePracticeSection(initialMode, initialTopicalPackId);
   const [selectedChapterFilter, setSelectedChapterFilter] = useState<number | 'all'>('all');
   const [activeExam, setActiveExam] = useState<ActiveExamSession | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -105,206 +90,113 @@ export const PracticeExamView: React.FC<PracticeExamViewProps> = ({
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [submitted, setSubmitted] = useState(false);
   const [showWrongOnly, setShowWrongOnly] = useState(false);
-  const [gen0606Mod, setGen0606Mod] = useState<Generator0606Module | null>(null);
 
-  // Track prompt signatures already seen across retries in this session so "Retry with New Questions" stays fresh
   const seenSignaturesRef = useRef<Set<string>>(new Set());
   const handledRouteKeyRef = useRef<string>('');
 
-  useEffect(() => {
-    setActiveExam(null);
-    setSelectedChapterFilter('all');
-    handledRouteKeyRef.current = '';
-  }, [subject]);
-
-  // Lazily import 0606 practice engine ONLY when subject === '0606'
-  useEffect(() => {
-    if (subject !== '0606' || gen0606Mod) return;
-    let cancelled = false;
-    import('../utils/questionGenerator0606')
-      .then((mod) => {
-        if (!cancelled) {
-          setGen0606Mod(mod);
-        }
-      })
-      .catch(() => {
-        // Ignore transient chunk load error; user can retry navigation
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [subject, gen0606Mod]);
-
-  const presets: PresetMetadata[] = useMemo(() => {
-    if (subject === '0606') {
-      return [
-        {
-          id: 'mock-0606-p1',
-          mode: 'mock-0606-p1',
-          title: 'Paper 1 — 0606 Non-Calculator Mock',
-          subtitle:
-            '2025–2027 Paper 1 Non-Calculator format covering Functions, Quadratics, Polynomials, Logs, Circle Geometry, Trig, Counting, Binomial & Calculus.',
-          tier: 'Extended',
-          badgeLabel: 'Paper 1 Non-Calc',
-          durationSeconds: 30 * 60,
-          questionCountLabel: '8 Qs · ~22 marks · 30 min',
-          formatLabel: 'MCQ + Exact Values + Numeric',
-        },
-        {
-          id: 'mock-0606-p2',
-          mode: 'mock-0606-p2',
-          title: 'Paper 2 — 0606 Calculator Mock',
-          subtitle:
-            '2025–2027 Paper 2 Scientific Calculator format featuring Exponential Equations, Linear Law, Circular Measure, Trig Equations, GP Sums & Kinematics.',
-          tier: 'Extended',
-          badgeLabel: 'Paper 2 Calculator',
-          durationSeconds: 30 * 60,
-          questionCountLabel: '8 Qs · ~24 marks · 30 min',
-          formatLabel: 'Multi-Mark Calculator Problems',
-        },
-        {
-          id: 'mock-0606-full',
-          mode: 'mock-0606-full',
-          title: 'Complete 0606 Multi-Format Assessment',
-          subtitle:
-            '12 fresh problems spanning all 14 official Additional Mathematics chapters (Paper 1 + Paper 2) with instant Cambridge A*–E grading.',
-          tier: 'Extended',
-          badgeLabel: 'Full 0606 Suite',
-          durationSeconds: 45 * 60,
-          questionCountLabel: '12 Qs · ~35 marks · 45 min',
-          formatLabel: 'All 14 Chapters · Fresh on Every Retry',
-          isFeatured: true,
-        },
-      ];
-    }
-
-    return [
+  const presets: PresetMetadata[] = useMemo(
+    () => [
       {
-        id: 'mock-core-p1',
-        mode: 'mock-core-p1',
-        title: 'Paper 1 — Core Non-Calculator Mock',
+        id: 'mock-p1-algebra',
+        mode: 'mock-p1-algebra',
+        title: 'P1 Focus — Quadratics, Functions, Circles & Series',
         subtitle:
-          'Mixed Multiple Choice, Numeric & Fraction drill on Number, HCF/LCM, Simultaneous Equations, Polygon Angles, and Probability.',
-        tier: 'Core',
-        badgeLabel: 'Core Tier',
-        durationSeconds: 18 * 60,
-        questionCountLabel: '8 Qs · ~18 marks · 18 min',
-        formatLabel: 'MCQ + Numeric + Fractions',
-      },
-      {
-        id: 'mock-core-p3',
-        mode: 'mock-core-p3',
-        title: 'Paper 3 — Core Calculator Mock',
-        subtitle:
-          'Calculator practice featuring Currency Conversions, Ratio Sharing, Sector Area, Pythagoras, and Pie Chart angles.',
-        tier: 'Core',
-        badgeLabel: 'Core Tier',
-        durationSeconds: 22 * 60,
-        questionCountLabel: '8 Qs · ~20 marks · 22 min',
-        formatLabel: 'MCQ + Numeric',
-      },
-      {
-        id: 'mock-ext-p2',
-        mode: 'mock-ext-p2',
-        title: 'Paper 2 — Extended Non-Calculator Mock',
-        subtitle:
-          '2025–2027 Paper 2 format covering Surds, Fractional Indices, Quadratic Sequences, Differentiation, Vectors & Circle Theorems.',
-        tier: 'Extended',
-        badgeLabel: 'Extended Tier',
+          'Paper 1 Pure Mathematics drill covering Completing the Square, Discriminant, Inverses, Perpendicular Bisectors, Circles, Binomial & AP/GP.',
+        badgeLabel: 'Pure Maths 1 (P1)',
         durationSeconds: 25 * 60,
-        questionCountLabel: '8 Qs · ~21 marks · 25 min',
-        formatLabel: 'MCQ + Exact Fractions + Numeric',
+        questionCountLabel: '6 Qs · ~21 marks · 25 min',
+        formatLabel: 'MCQ + Exact Value + Numeric',
       },
       {
-        id: 'mock-ext-p4',
-        mode: 'mock-ext-p4',
-        title: 'Paper 4 — Extended Calculator Mock',
+        id: 'mock-p1-calculus',
+        mode: 'mock-p1-calculus',
+        title: 'P1 Focus — Circular Measure, Trig & Calculus',
         subtitle:
-          'Structured multi-mark problems: Bounds, Reverse %, Inverse Proportion, Cosine Rule, Cones, Conditional Probability & Histograms.',
-        tier: 'Extended',
-        badgeLabel: 'Extended Tier',
-        durationSeconds: 30 * 60,
-        questionCountLabel: '8 Qs · ~23 marks · 30 min',
-        formatLabel: 'MCQ + Exact Fractions + Numeric',
+          'Paper 1 Pure Mathematics drill on Radians, Trig Identities & Equations, Chain Rule, Tangents/Normals, Stationary Points, Integration & Volumes.',
+        badgeLabel: 'Pure Maths 1 (P1)',
+        durationSeconds: 25 * 60,
+        questionCountLabel: '6 Qs · ~22 marks · 25 min',
+        formatLabel: 'Exact Fractions + Numeric + MCQ',
       },
       {
-        id: 'mock-full',
-        mode: 'mock-full',
-        title: 'Complete 0580 Multi-Format Assessment',
+        id: 'mock-p1-full',
+        mode: 'mock-p1-full',
+        title: 'Complete 9709 Paper 1 (P1) Multi-Format Mock',
         subtitle:
-          '12 fresh problems spanning all 9 chapters in MCQ, Numeric, and Exact Fraction formats with instant Cambridge A*–G grading.',
-        tier: 'Extended',
-        badgeLabel: 'Extended Tier',
-        durationSeconds: 40 * 60,
-        questionCountLabel: '12 Qs · ~31 marks · 40 min',
-        formatLabel: 'All 3 Question Types · Fresh on Every Retry',
+          '10 fresh problems spanning all 8 Pure Mathematics 1 chapters with step-by-step M1/A1/B1 mark schemes and Cambridge AS A–E grading.',
+        badgeLabel: 'Full P1 Mock',
+        durationSeconds: 45 * 60,
+        questionCountLabel: '10 Qs · ~36 marks · 45 min',
+        formatLabel: 'All 8 P1 Chapters · Fresh on Every Retry',
         isFeatured: true,
       },
-    ];
-  }, [subject]);
+    ],
+    []
+  );
 
   const launchGeneratedSession = useCallback(
-    (config: {
+    async (config: {
       id: string;
-      mode: CombinedPracticeMode;
+      mode: MockPaperMode;
       title: string;
       subtitle: string;
-      tier: 'Core' | 'Extended';
       durationSeconds: number;
       attemptNumber: number;
       chapterId?: number | 'all';
       topicId?: string;
     }) => {
-      if (subject === '0606') {
-        if (!gen0606Mod) return;
-        const generated = gen0606Mod.generate0606MockQuestions({
-          mode: config.mode as MockPaperMode0606,
-          attemptNumber: config.attemptNumber,
-          chapterId: config.chapterId,
-          topicId: config.topicId,
-          avoidSignatures: seenSignaturesRef.current,
-        });
+      const [{ PRACTICE_BANK_9709 }, generated] = await Promise.all([
+        import('../data/practiceBank9709'),
+        Promise.resolve(
+          generateMockExamQuestions({
+            mode: config.mode,
+            attemptNumber: config.attemptNumber,
+            chapterId: config.chapterId,
+            topicId: config.topicId,
+            avoidSignatures: seenSignaturesRef.current,
+          })
+        ),
+      ]);
 
-        for (const sig of generated.signatures) {
-          seenSignaturesRef.current.add(sig);
+      const unseenCurated = PRACTICE_BANK_9709.filter((q) => {
+        if (seenSignaturesRef.current.has(q.id)) return false;
+        if (config.mode === 'topical') {
+          if (config.topicId) return q.topicId === config.topicId;
+          if (typeof config.chapterId === 'number') return q.chapterId === config.chapterId;
+          return q.chapterId >= 1 && q.chapterId <= 8;
         }
-
-        setActiveExam({
-          ...config,
-          tier: 'Extended',
-          questions: generated.questions,
-        });
-        setAnswers({});
-        setCurrentIdx(0);
-        setSecondsLeft(config.durationSeconds);
-        setSubmitted(false);
-        setShowWrongOnly(false);
-        return;
-      }
-
-      const generated = generateMockExamQuestions({
-        mode: config.mode as MockPaperMode,
-        attemptNumber: config.attemptNumber,
-        chapterId: config.chapterId,
-        topicId: config.topicId,
-        avoidSignatures: seenSignaturesRef.current,
+        if (config.mode === 'mock-p1-algebra') {
+          return [1, 2, 3, 6].includes(q.chapterId);
+        }
+        if (config.mode === 'mock-p1-calculus') {
+          return [4, 5, 7, 8].includes(q.chapterId);
+        }
+        return true;
       });
 
+      const curatedLimit =
+        config.mode === 'topical' && typeof config.chapterId === 'number'
+          ? 4
+          : config.mode === 'mock-p1-full'
+            ? 4
+            : 2;
+      const pickedCurated = unseenCurated.slice(0, curatedLimit);
+      for (const q of pickedCurated) {
+        seenSignaturesRef.current.add(q.id);
+      }
       for (const sig of generated.signatures) {
         seenSignaturesRef.current.add(sig);
       }
 
-      const resolvedTier: 'Core' | 'Extended' =
-        config.mode === 'topical'
-          ? generated.questions.some((q) => q.tier === 'Extended')
-            ? 'Extended'
-            : 'Core'
-          : config.tier;
+      const targetTotal = generated.questions.length;
+      const mergedQuestions = [
+        ...pickedCurated,
+        ...generated.questions.slice(0, Math.max(2, targetTotal - Math.min(2, pickedCurated.length))),
+      ].slice(0, Math.max(targetTotal, pickedCurated.length));
 
       setActiveExam({
         ...config,
-        tier: resolvedTier,
-        questions: generated.questions,
+        questions: mergedQuestions,
       });
       setAnswers({});
       setCurrentIdx(0);
@@ -312,7 +204,7 @@ export const PracticeExamView: React.FC<PracticeExamViewProps> = ({
       setSubmitted(false);
       setShowWrongOnly(false);
     },
-    [subject, gen0606Mod]
+    []
   );
 
   const startPreset = useCallback(
@@ -322,7 +214,6 @@ export const PracticeExamView: React.FC<PracticeExamViewProps> = ({
         mode: preset.mode,
         title: preset.title,
         subtitle: preset.subtitle,
-        tier: preset.tier,
         durationSeconds: preset.durationSeconds,
         attemptNumber: 1,
       });
@@ -346,7 +237,6 @@ export const PracticeExamView: React.FC<PracticeExamViewProps> = ({
       mode: activeExam.mode,
       title: activeExam.title,
       subtitle: activeExam.subtitle,
-      tier: activeExam.tier,
       durationSeconds: activeExam.durationSeconds,
       attemptNumber: activeExam.attemptNumber + 1,
       chapterId: activeExam.chapterId,
@@ -358,71 +248,53 @@ export const PracticeExamView: React.FC<PracticeExamViewProps> = ({
     (chapterId: number | 'all', attemptNumber = 1) => {
       const chTitle =
         chapterId === 'all'
-          ? `All ${syllabus.length} Chapters`
+          ? `All ${syllabus.length} P1 Chapters`
           : `Chapter ${chapterId}: ${syllabus.find((c) => c.id === chapterId)?.title || ''}`;
       launchGeneratedSession({
-        id: `chapter-${subject}-${chapterId}`,
+        id: `chapter-9709-p1-${chapterId}`,
         mode: 'topical',
-        title: `Topical Practice — ${chTitle}`,
-        subtitle: `Fresh multi-format Cambridge ${subject} problems with M1/A1/B1 mark schemes`,
-        tier: 'Extended',
+        title: `P1 Topical Practice — ${chTitle}`,
+        subtitle: 'Fresh multi-format Cambridge 9709 Paper 1 problems with M1/A1/B1 mark schemes',
         durationSeconds: chapterId === 'all' ? 24 * 60 : 15 * 60,
         attemptNumber,
         chapterId,
       });
     },
-    [launchGeneratedSession, syllabus, subject]
+    [launchGeneratedSession, syllabus]
   );
 
   useEffect(() => {
-    if (
-      initialTopicalPackId ||
-      initialMode === 'topical-paper' ||
-      initialMode === 'practice-test'
-    ) {
-      setActiveExam(null);
+    if (!initialMode || initialMode === 'practice-test') {
+      if (initialMode === 'practice-test') {
+        setActiveExam(null);
+      }
       handledRouteKeyRef.current = '';
       return;
     }
-    const routeKey = `${subject}:${initialMode || ''}:${initialTopicId || ''}`;
-    if (!initialMode) {
-      handledRouteKeyRef.current = '';
-      return;
-    }
-    if (subject === '0606' && !gen0606Mod) {
-      // Wait for lazy 0606 generator chunk to finish loading
-      return;
-    }
+    const routeKey = `${subject}:${initialMode}:${initialTopicId || ''}:${navNonce}`;
     if (handledRouteKeyRef.current === routeKey) return;
     handledRouteKeyRef.current = routeKey;
 
     if (initialMode === 'topical' && initialTopicId) {
       const fallbackChapter = Number(initialTopicId.split('.')[0]) || 1;
       launchGeneratedSession({
-        id: `topical-${subject}-${initialTopicId}`,
+        id: `topical-9709-p1-${initialTopicId}`,
         mode: 'topical',
-        title: `Topical Practice — Syllabus ${initialTopicId}`,
-        subtitle: `Focused Cambridge ${subject} questions aligned to Topic ${initialTopicId} & Chapter ${fallbackChapter}`,
-        tier: 'Extended',
+        title: `P1 Topical Practice — Syllabus ${initialTopicId}`,
+        subtitle: `Focused Cambridge 9709 Paper 1 questions aligned to Topic ${initialTopicId} & Chapter ${fallbackChapter}`,
         durationSeconds: 15 * 60,
         attemptNumber: 1,
         chapterId: fallbackChapter,
         topicId: initialTopicId,
       });
-    } else if (initialMode === 'mock-extended') {
-      const targetId = subject === '0606' ? 'mock-0606-p1' : 'mock-ext-p2';
-      const ext = presets.find((p) => p.id === targetId);
-      if (ext) startPreset(ext);
     } else {
       const matchingPreset = presets.find((p) => p.id === initialMode || p.mode === initialMode);
       if (matchingPreset) startPreset(matchingPreset);
     }
   }, [
     subject,
-    gen0606Mod,
     initialMode,
     initialTopicId,
-    initialTopicalPackId,
     navNonce,
     presets,
     launchGeneratedSession,
@@ -453,234 +325,223 @@ export const PracticeExamView: React.FC<PracticeExamViewProps> = ({
     }
   }, [submitted, activeExam, answers, onFlagWeakTopics]);
 
-  const previewQuestionCount = useMemo(() => {
-    if (subject === '0606') {
-      if (!gen0606Mod) return 4;
-      return gen0606Mod.generate0606MockQuestions({
+  const previewQuestionCount = useMemo(
+    () =>
+      generateMockExamQuestions({
         mode: 'topical',
         attemptNumber: 1,
         chapterId: selectedChapterFilter,
-      }).questions.length;
-    }
-    return generateMockExamQuestions({
-      mode: 'topical',
-      attemptNumber: 1,
-      chapterId: selectedChapterFilter,
-    }).questions.length;
-  }, [subject, gen0606Mod, selectedChapterFilter]);
+      }).questions.length,
+    [selectedChapterFilter]
+  );
 
   if (!activeExam) {
-    if (subject === '0606' && !gen0606Mod && activeSection === 'practice-test') {
-      return (
-        <main className="max-w-[1440px] mx-auto px-4 sm:px-6 py-8">
-          <div className="p-8 sk-card text-center text-xs font-semibold text-[var(--sk-dim)]">
-            Loading 0606 Additional Mathematics practice engine...
-          </div>
-        </main>
-      );
-    }
-
     return (
-      <main className="max-w-[1440px] mx-auto px-4 sm:px-6 py-6 space-y-6">
-        {/* Topical Section Switcher (matches Topical nav dropdown: Practice Test & Topical Paper) */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div
-            role="tablist"
-            aria-label="Topical section view"
-            className="inline-flex sk-tabs"
-          >
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeSection === 'practice-test'}
-              data-active={activeSection === 'practice-test'}
-              onClick={() => onNavigate({ view: 'practice', subject, mode: 'practice-test' })}
-              className="px-4 py-1.5 text-xs font-bold cursor-pointer whitespace-nowrap sk-tab"
-            >
-              Practice Test
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeSection === 'topical-paper'}
-              data-active={activeSection === 'topical-paper'}
-              onClick={() => onNavigate({ view: 'practice', subject, mode: 'topical-paper' })}
-              className="px-4 py-1.5 text-xs font-bold cursor-pointer whitespace-nowrap sk-tab"
-            >
-              Topical Paper
-            </button>
+      <main className="max-w-[1440px] mx-auto px-4 sm:px-6 py-6 flex flex-col lg:flex-row gap-6 items-stretch lg:items-start">
+        {/* Left Paper Modules Sidebar: P1 Live, P2/P3/M1/S1/S2 Coming Soon */}
+        <aside
+          aria-label="9709 Practice Paper Modules"
+          className="w-full lg:w-80 shrink-0 sk-card p-4 space-y-3"
+        >
+          <div>
+            <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--sk-dim)]">
+              9709 Practice Papers
+            </div>
+            <h2 className="font-display text-sm font-bold text-[var(--sk-ink)] mt-0.5">
+              Select Paper Module
+            </h2>
           </div>
-          <span className="text-xs text-[var(--sk-dim)]">
-            {activeSection === 'practice-test'
-              ? `Timed ${subject} Mock Exams & Auto-Graded Chapter Drills`
-              : subject === '0606'
-                ? '14 Annotatable PapaCambridge 0606 Topical PDFs'
-                : '78 Annotatable Topical Question & Worked Solution PDFs'}
-          </span>
-        </div>
 
-        {activeSection === 'practice-test' ? (
-          <div className="space-y-8">
-            <section className="p-6 sk-card flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <ul className="space-y-2">
+            {PAPER_MODULES_9709.map((mod) => {
+              const isLive = mod.status === 'live';
+              if (isLive) {
+                return (
+                  <li key={mod.code}>
+                    <div
+                      aria-current="page"
+                      className="p-3 rounded-xl bg-[var(--sk-chip)] border-2 border-[var(--sk-ink)] shadow-[2px_3px_0_var(--sk-soft)] space-y-1"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-xs font-bold text-[var(--sk-pri-hover)]">
+                          {mod.code} · Paper {mod.paperNumber}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded bg-emerald-100 border border-emerald-600 text-[10px] font-mono font-bold text-emerald-900">
+                          LIVE
+                        </span>
+                      </div>
+                      <div className="font-display text-xs font-bold text-[var(--sk-ink)]">
+                        {mod.name}
+                      </div>
+                      <div className="text-[11px] text-[var(--sk-dim)] leading-snug">
+                        {mod.description}
+                      </div>
+                    </div>
+                  </li>
+                );
+              }
+              return (
+                <li key={mod.code}>
+                  <button
+                    type="button"
+                    disabled
+                    aria-disabled="true"
+                    title={`${mod.code} (${mod.name}) practice drills coming soon`}
+                    className="w-full p-2.5 rounded-xl border border-[var(--sk-line)] bg-[var(--sk-surface)] text-left flex items-center justify-between gap-2 opacity-70 cursor-not-allowed"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Lock className="w-3.5 h-3.5 text-[var(--sk-dim)] shrink-0" />
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold text-[var(--sk-ink)] truncate">
+                          <span className="font-mono font-bold mr-1.5">{mod.code}</span>
+                          {mod.name}
+                        </div>
+                      </div>
+                    </div>
+                    <span className="px-1.5 py-0.5 rounded bg-white border border-[var(--sk-line)] text-[10px] font-mono font-semibold text-[var(--sk-dim)] whitespace-nowrap shrink-0">
+                      Coming Soon
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </aside>
+
+        {/* Main P1 Practice Content */}
+        <div className="flex-1 min-w-0 space-y-6">
+          <section className="p-6 sk-card flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="text-xs text-[var(--sk-dim)] mb-1">
+                Cambridge AS &amp; A Level Mathematics (9709) · Paper 1 (P1) Live
+              </div>
+              <h1 className="font-display text-2xl font-bold text-[var(--sk-ink)]">
+                9709 Pure Mathematics 1 (P1) Practice
+              </h1>
+              <p className="text-sm text-[var(--sk-body)] mt-1 max-w-2xl">
+                Practise timed Paper 1 mock exams and chapter drills across all 8 P1 topics with randomized numerical parameters, M1/A1/B1 mark schemes, and Cambridge AS grading.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onOpenFormulaSheet}
+              className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold sk-btn-secondary cursor-pointer shrink-0 whitespace-nowrap"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-[var(--sk-pri)]" />
+              View 9709 Formula Sheet
+            </button>
+          </section>
+
+          {/* Timed Mock Exam Presets */}
+          <section className="space-y-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="font-display text-base font-bold text-[var(--sk-ink)]">
+                Timed 9709 P1 Mock Papers
+              </h2>
+              <span className="text-xs text-[var(--sk-dim)]">
+                Unlimited retries — every retake swaps in fresh parameterised variants
+              </span>
+            </div>
+            <div className="grid md:grid-cols-2 gap-4">
+              {presets.map((preset) => (
+                <article
+                  key={preset.id}
+                  className={`p-5 flex flex-col justify-between gap-4 ${
+                    preset.isFeatured ? 'md:col-span-2 sk-card-accent' : 'sk-card'
+                  }`}
+                >
+                  <div className="space-y-2">
+                    <div
+                      className={`flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-[var(--sk-dim)] ${
+                        preset.isFeatured ? 'items-center justify-between' : 'flex-col'
+                      }`}
+                    >
+                      <span className="text-[var(--sk-pri-hover)] font-bold">
+                        {preset.badgeLabel} · {preset.formatLabel}
+                      </span>
+                      <span className="font-mono tabular-nums">{preset.questionCountLabel}</span>
+                    </div>
+                    <h3 className="font-display text-base font-bold text-[var(--sk-ink)]">
+                      {preset.title}
+                    </h3>
+                    <p className="text-xs text-[var(--sk-body)] leading-relaxed">
+                      {preset.subtitle}
+                    </p>
+                  </div>
+
+                  <div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        triggerSakugaBurst(e, getActiveSubjectVfxVariant('primary'), 'GO!');
+                        startPreset(preset);
+                      }}
+                      className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold sk-btn-primary cursor-pointer"
+                    >
+                      <Play className="w-3.5 h-3.5" />
+                      Begin P1 Paper
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          {/* Topical Practice Builder */}
+          <section className="p-6 sk-card space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                <div className="text-xs text-[var(--sk-dim)] mb-1">
-                  {subject === '0606'
-                    ? 'Cambridge IGCSE Additional Mathematics (0606) · 2025–2027 Syllabus'
-                    : 'Cambridge IGCSE Mathematics (0580) · Timed Exam & Topical Drills'}
-                </div>
-                <h1 className="font-display text-2xl font-bold text-[var(--sk-ink)]">
-                  IGCSE {subject} Practice Tests
-                </h1>
-                <p className="text-sm text-[var(--sk-body)] mt-1 max-w-2xl">
-                  {subject === '0606'
-                    ? 'Practise Paper 1 (Non-Calculator) and Paper 2 (Calculator) style Additional Mathematics questions across all 14 chapters with M1/A1/B1 mark schemes and Cambridge A*–E grading.'
-                    : 'Practise with Multiple Choice, Numeric, and Exact Fraction questions under Non-Calculator (Papers 1/2) or Calculator (Papers 3/4) rules. Every retry generates fresh questions with new numbers and scenarios.'}
+                <h2 className="font-display text-base font-bold text-[var(--sk-ink)]">
+                  Topical Practice by P1 Syllabus Chapter
+                </h2>
+                <p className="text-xs text-[var(--sk-dim)] mt-0.5">
+                  Target any of the 8 Pure Mathematics 1 chapters with non-repeating variants
                 </p>
               </div>
               <button
                 type="button"
-                onClick={onOpenFormulaSheet}
-                className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold sk-btn-secondary cursor-pointer shrink-0 whitespace-nowrap"
+                onClick={(e) => {
+                  triggerSakugaBurst(e, getActiveSubjectVfxVariant('accent'), 'DRILL!');
+                  startChapterDrill(selectedChapterFilter, 1);
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold sk-btn-ink cursor-pointer shrink-0"
               >
-                <FileSpreadsheet className="w-4 h-4 text-[var(--sk-pri)]" />
-                View {subject} Formula Sheet
+                <Play className="w-3.5 h-3.5" />
+                Start Drill ({previewQuestionCount} Fresh Questions)
               </button>
-            </section>
+            </div>
 
-            {/* Timed Mock Exam Presets */}
-            <section className="space-y-3">
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h2 className="font-display text-base font-bold text-[var(--sk-ink)]">
-                  Timed IGCSE {subject} Mock Papers
-                </h2>
-                <span className="text-xs text-[var(--sk-dim)]">
-                  Unlimited retries — every retake swaps in fresh question variants
-                </span>
-              </div>
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {presets.map((preset) => (
-                  <article
-                    key={preset.id}
-                    className={`p-5 flex flex-col justify-between gap-4 ${
-                      preset.isFeatured
-                        ? 'md:col-span-2 lg:col-span-3 sk-card-accent'
-                        : 'sk-card'
-                    }`}
-                  >
-                    <div className="space-y-2">
-                      <div
-                        className={`flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-[var(--sk-dim)] ${
-                          preset.isFeatured ? 'items-center justify-between' : 'flex-col'
-                        }`}
-                      >
-                        <span
-                          className={
-                            preset.tier === 'Extended'
-                              ? 'text-[var(--sk-acc-ink)] font-bold'
-                              : 'text-[var(--sk-ink)] font-bold'
-                          }
-                        >
-                          {preset.badgeLabel} · {preset.formatLabel}
-                        </span>
-                        <span className="font-mono tabular-nums">{preset.questionCountLabel}</span>
-                      </div>
-                      <h3 className="font-display text-base font-bold text-[var(--sk-ink)]">
-                        {preset.title}
-                      </h3>
-                      <p className="text-xs text-[var(--sk-body)] leading-relaxed">{preset.subtitle}</p>
-                    </div>
-
-                    <div>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          triggerSakugaBurst(e, getActiveSubjectVfxVariant('primary'), 'GO!');
-                          startPreset(preset);
-                        }}
-                        className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold sk-btn-primary cursor-pointer"
-                      >
-                        <Play className="w-3.5 h-3.5" />
-                        Begin Paper
-                      </button>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-
-            {/* Topical Practice Builder */}
-            <section className="p-6 sk-card space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <h2 className="font-display text-base font-bold text-[var(--sk-ink)]">
-                    Topical Practice by Syllabus Chapter
-                  </h2>
-                  <p className="text-xs text-[var(--sk-dim)] mt-0.5">
-                    Target any chapter from the {subject} curriculum with non-repeating variants
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    triggerSakugaBurst(e, getActiveSubjectVfxVariant('accent'), 'DRILL!');
-                    startChapterDrill(selectedChapterFilter, 1);
-                  }}
-                  className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold sk-btn-ink cursor-pointer shrink-0"
-                >
-                  <Play className="w-3.5 h-3.5" />
-                  Start Drill ({previewQuestionCount} Fresh Questions)
-                </button>
-              </div>
-
-              <div
-                role="tablist"
-                aria-label="Filter practice drill by chapter"
-                className="flex flex-wrap gap-1.5 sk-tabs"
+            <div
+              role="tablist"
+              aria-label="Filter P1 practice drill by chapter"
+              className="flex flex-wrap gap-1.5 sk-tabs"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={selectedChapterFilter === 'all'}
+                data-active={selectedChapterFilter === 'all'}
+                onClick={() => setSelectedChapterFilter('all')}
+                className="px-3 py-1.5 text-xs font-semibold cursor-pointer whitespace-nowrap sk-tab"
               >
+                All P1 Chapters
+              </button>
+              {syllabus.map((ch) => (
                 <button
+                  key={ch.id}
                   type="button"
                   role="tab"
-                  aria-selected={selectedChapterFilter === 'all'}
-                  data-active={selectedChapterFilter === 'all'}
-                  onClick={() => setSelectedChapterFilter('all')}
+                  aria-selected={selectedChapterFilter === ch.id}
+                  data-active={selectedChapterFilter === ch.id}
+                  onClick={() => setSelectedChapterFilter(ch.id)}
                   className="px-3 py-1.5 text-xs font-semibold cursor-pointer whitespace-nowrap sk-tab"
                 >
-                  All Chapters
+                  {ch.id}. {ch.title}
                 </button>
-                {syllabus.map((ch) => (
-                  <button
-                    key={ch.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={selectedChapterFilter === ch.id}
-                    data-active={selectedChapterFilter === ch.id}
-                    onClick={() => setSelectedChapterFilter(ch.id)}
-                    className="px-3 py-1.5 text-xs font-semibold cursor-pointer whitespace-nowrap sk-tab"
-                  >
-                    {ch.id}. {ch.title}
-                  </button>
-                ))}
-              </div>
-            </section>
-          </div>
-        ) : (
-          /* Topical Past Papers (0580 Q+Ans + 0606 PapaCambridge Annotatable PDFs) */
-          <Suspense
-            fallback={
-              <div className="p-8 sk-card text-center text-xs text-[var(--sk-dim)]">
-                Loading {subject} topical PDF packs...
-              </div>
-            }
-          >
-            <TopicalPastPapersSection
-              subject={subject}
-              syllabus={syllabus}
-              selectedChapterFilter={selectedChapterFilter}
-              initialPackId={initialTopicalPackId}
-              onNavigate={onNavigate}
-            />
-          </Suspense>
-        )}
+              ))}
+            </div>
+          </section>
+        </div>
       </main>
     );
   }
@@ -702,7 +563,7 @@ export const PracticeExamView: React.FC<PracticeExamViewProps> = ({
     };
   });
   const earnedMarks = scoredResults.reduce((acc, r) => acc + r.marksEarned, 0);
-  const gradeInfo = estimateCambridgeGrade(earnedMarks, totalMarks, activeExam.tier, subject);
+  const gradeInfo = estimateCambridgeGrade(earnedMarks, totalMarks, 'AS');
   const weakTopics = extractWeakTopicsFromResults(scoredResults, syllabus);
   const wrongCount = scoredResults.filter((r) => !r.isCorrect).length;
   const visibleResults = showWrongOnly
@@ -717,8 +578,7 @@ export const PracticeExamView: React.FC<PracticeExamViewProps> = ({
         <section className="p-6 sk-card flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-1">
             <div className="text-xs text-[var(--sk-dim)]">
-              {activeExam.title} · Attempt #{activeExam.attemptNumber} ·{' '}
-              {subject === '0606' ? '0606 (A*–E Grading)' : `${activeExam.tier} Tier Grading`}
+              {activeExam.title} · Attempt #{activeExam.attemptNumber} · 9709 AS Grading
             </div>
             <h1 className="font-display text-2xl font-bold text-[var(--sk-ink)]">
               Examination Results &amp; Mark Scheme
@@ -745,7 +605,6 @@ export const PracticeExamView: React.FC<PracticeExamViewProps> = ({
           </div>
         </section>
 
-        {/* Diagnostic Recommended Notes Panel */}
         {weakTopics.length > 0 ? (
           <section
             aria-label="Topics to Revise Based on Wrong Answers"
@@ -758,7 +617,7 @@ export const PracticeExamView: React.FC<PracticeExamViewProps> = ({
                 </h2>
                 <p className="text-xs text-[var(--sk-body)] mt-0.5">
                   You missed {wrongCount} {wrongCount === 1 ? 'question' : 'questions'} across{' '}
-                  {weakTopics.length} syllabus {weakTopics.length === 1 ? 'topic' : 'topics'}. Jump directly to the corresponding {subject} study notes to fix each gap:
+                  {weakTopics.length} P1 syllabus {weakTopics.length === 1 ? 'topic' : 'topics'}. Jump directly to the corresponding 9709 notes:
                 </p>
               </div>
             </div>
@@ -803,7 +662,7 @@ export const PracticeExamView: React.FC<PracticeExamViewProps> = ({
         ) : (
           <section className="p-4 bg-emerald-50 border-2 border-emerald-700 rounded-2xl flex items-center gap-2 text-xs font-bold text-emerald-900 shadow-[3px_3px_0_#BBF7D0]">
             <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
-            100% accuracy on this paper — no weak syllabus topics detected.
+            100% accuracy on this P1 paper — no weak syllabus topics detected.
           </section>
         )}
 
@@ -857,7 +716,7 @@ export const PracticeExamView: React.FC<PracticeExamViewProps> = ({
             type="button"
             onClick={() => {
               setActiveExam(null);
-              onNavigate({ view: 'practice', subject });
+              onNavigate({ view: 'practice', subject, mode: 'practice-test' });
             }}
             className="px-4 py-2 text-xs font-bold sk-btn-ink cursor-pointer"
           >
@@ -925,24 +784,15 @@ export const PracticeExamView: React.FC<PracticeExamViewProps> = ({
                 <div className="p-3 rounded-xl bg-emerald-50 border-[1.5px] border-emerald-200">
                   <span className="text-emerald-800 block mb-0.5">Official Answer</span>
                   <span className="font-mono font-semibold text-emerald-900">
-                    {res.question.unit && ['$', '£', '€'].includes(res.question.unit) ? (
-                      <>
-                        {res.question.unit}
-                        <MathText text={res.question.correctAnswer} />
-                      </>
-                    ) : (
-                      <>
-                        <MathText text={res.question.correctAnswer} />
-                        {res.question.unit ? ` ${res.question.unit}` : ''}
-                      </>
-                    )}
+                    <MathText text={res.question.correctAnswer} />
+                    {res.question.unit ? ` ${res.question.unit}` : ''}
                   </span>
                 </div>
               </div>
 
               <div className="p-3.5 sk-card-soft space-y-2">
                 <div className="text-xs font-bold text-[var(--sk-ink)]">
-                  Cambridge Mark Scheme &amp; Working
+                  Cambridge 9709 Mark Scheme &amp; Working
                 </div>
                 <ul className="space-y-1 text-xs text-[var(--sk-body)]">
                   {res.question.markScheme.map((ms, mi) => (
@@ -992,7 +842,7 @@ export const PracticeExamView: React.FC<PracticeExamViewProps> = ({
                       className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold sk-btn-primary cursor-pointer"
                     >
                       <BookOpen className="w-3.5 h-3.5" />
-                      Study Topic {res.question.topicId} Notes to Fix This
+                      Study Topic {res.question.topicId} Notes
                       <ArrowRight className="w-3.5 h-3.5" />
                     </button>
                   </>
@@ -1096,7 +946,9 @@ export const PracticeExamView: React.FC<PracticeExamViewProps> = ({
               {currentQ.topicId} {currentQ.topicTitle}
             </span>
             <span aria-hidden="true">·</span>
-            <span>{subject === '0606' ? '0606 Syllabus' : currentQ.tier}</span>
+            <span className="font-mono font-semibold text-[var(--sk-pri-hover)]">
+              {currentQ.paperModule}
+            </span>
             <span aria-hidden="true">·</span>
             <span className="font-semibold text-[var(--sk-pri)]">
               {getQuestionFormatLabel(currentQ.questionType)}
@@ -1174,7 +1026,7 @@ export const PracticeExamView: React.FC<PracticeExamViewProps> = ({
               placeholder={
                 currentQ.questionType === 'text'
                   ? 'Enter simplified fraction (a/b) or exact decimal'
-                  : 'Enter exact value or 3 s.f. number'
+                  : 'Enter exact value or fraction (e.g. 5/2)'
               }
               className="w-full max-w-md px-3.5 py-2.5 text-sm font-mono sk-input"
             />

@@ -1,4 +1,14 @@
-export type TierLevel = 'Core & Extended' | 'Extended';
+export type SubjectCode = '9709';
+
+export type PaperModuleCode = 'P1' | 'P2' | 'P3' | 'M1' | 'S1' | 'S2';
+
+export interface PaperModuleMeta {
+  code: PaperModuleCode;
+  name: string;
+  paperNumber: string;
+  status: 'live' | 'coming-soon';
+  description: string;
+}
 
 export interface WorkedExample {
   title: string;
@@ -11,10 +21,10 @@ export interface WorkedExample {
 
 export interface QuickCheckQuestion {
   id: string;
-  paperCode?: string; // Only when verified verbatim from a real 0580 past paper
+  paperCode?: string; // e.g. '9709/12/M/J/24'
   questionNumber?: string; // e.g. 'Q4'
   marks?: number;
-  paperType?: 'Non-Calculator' | 'Calculator';
+  paperType?: 'Pure Mathematics 1' | 'Calculator Allowed';
   prompt: string;
   answer: string;
   acceptedAnswers?: string[];
@@ -26,26 +36,48 @@ export interface QuickCheckQuestion {
 }
 
 export type SandboxType =
-  | 'money-converter'
-  | 'percentage-interest'
-  | 'linear-graph'
   | 'quadratic-solver'
   | 'geogebra-graph'
-  | 'trigonometry-triangle'
-  | 'circle-theorems'
-  | 'probability-tree'
-  | 'mensuration-3d'
-  | 'standard-form'
   | 'sequence-explorer'
   | 'none';
 
 export interface CoursebookRef {
-  unit: number; // Units 1–6 in Cambridge Coursebook
-  unitTitle: string; // e.g. 'Unit 1: Number'
-  chapter: number; // Chapters 1–24
-  chapterTitle: string; // Exact Coursebook chapter title
-  sections: string; // e.g. '1.7 Rounding numbers & 5.6 Estimation'
+  unit: number;
+  unitTitle: string;
+  chapter: number;
+  chapterTitle: string;
+  sections: string;
   editionNote?: string;
+}
+
+export type P1DiagramId =
+  | 'quad-sketch-fx'
+  | 'quad-sketch-gx'
+  | 'discriminant-cases'
+  | 'mapping-types'
+  | 'vertical-line-test'
+  | 'linear-domain-range'
+  | 'composite-mapping'
+  | 'inverse-mapping'
+  | 'horizontal-line-test'
+  | 'inverse-reflection'
+  | 'coord-midpoint-distance'
+  | 'circle-diameter'
+  | 'angle-conversion'
+  | 'circular-sector-segment'
+  | 'trig-waves'
+  | 'astc-unit-circle'
+  | 'pascal-binomial'
+  | 'ap-gp-series'
+  | 'tangent-normal'
+  | 'stationary-fdt-sdt'
+  | 'area-under-curves'
+  | 'volume-of-revolution';
+
+export interface NoteDiagramMeta {
+  id: P1DiagramId;
+  title: string;
+  caption: string;
 }
 
 export interface KeyFindingItem {
@@ -55,12 +87,13 @@ export interface KeyFindingItem {
 }
 
 export interface SubtopicNote {
-  id: string; // e.g. '1.16'
+  id: string; // e.g. '1.1'
   chapterId: number; // e.g. 1
-  code: string; // e.g. '1.16'
-  title: string; // e.g. 'Money'
-  tier: TierLevel;
+  code: string; // e.g. '1.1'
+  title: string;
+  paperCode: PaperModuleCode;
   summary: string;
+  isLoaded?: boolean;
   aims?: string[];
   coursebookRef?: CoursebookRef;
   coursebookTip?: string;
@@ -68,8 +101,8 @@ export interface SubtopicNote {
   bigIdea?: string;
   keyFindings?: KeyFindingItem[];
   stepByStepMethod?: string[];
-  coreObjectives: string[];
-  extendedObjectives?: string[];
+  diagrams?: NoteDiagramMeta[];
+  objectives: string[];
   keyFormulas: {
     label: string;
     latex: string;
@@ -99,8 +132,26 @@ export interface SubtopicNote {
 export interface SyllabusChapter {
   id: number;
   title: string;
+  paperCode: PaperModuleCode;
   description: string;
   subtopics: SubtopicNote[];
+}
+
+export interface SyllabusSubtopicMeta {
+  id: string;
+  chapterId: number;
+  code: string;
+  title: string;
+  paperCode: PaperModuleCode;
+  summary: string;
+}
+
+export interface SyllabusChapterMeta {
+  id: number;
+  title: string;
+  paperCode: PaperModuleCode;
+  description: string;
+  subtopics: SyllabusSubtopicMeta[];
 }
 
 export interface PracticeQuestion {
@@ -108,10 +159,10 @@ export interface PracticeQuestion {
   chapterId: number;
   topicId: string;
   topicTitle: string;
-  tier: 'Core' | 'Extended';
-  paperType: 'Non-Calculator' | 'Calculator';
+  paperModule: PaperModuleCode;
+  paperType: 'Pure Mathematics 1' | 'Calculator Allowed';
   marks: number;
-  sourceRef: string; // e.g. '0580/22/M/J/24 Q7'
+  sourceRef: string; // e.g. '9709/12/M/J/24 Q5'
   question: string;
   questionType: 'numeric' | 'mcq' | 'text';
   options?: string[];
@@ -133,20 +184,19 @@ export interface PastPaperSession {
   year: number;
   series: 'March' | 'May/June' | 'Oct/Nov' | 'Topical' | 'Specimen';
   url: string;
+  upstreamSlug?: string;
 }
 
 export interface PastPaperFile {
   filename: string;
   docType: 'QP' | 'MS' | 'ER' | 'GT' | 'IN' | 'OTHER';
   docTypeLabel: string;
-  paperNumber: string; // '1', '2', '3', '4', or '-'
-  variant: string; // '1', '2', '3', or '-'
-  tier: 'Core' | 'Extended' | 'All';
+  paperNumber: string; // '1', '2', '3', '4', '5', '6', or '-'
+  variant: string; // '1', '2', '3', '5', or '-'
+  paperComponent: PaperModuleCode | 'All';
   url: string;
   sessionSlug: string;
 }
-
-export type SubjectCode = '0580' | '0606';
 
 export interface TopicalPaperPack {
   id: string;

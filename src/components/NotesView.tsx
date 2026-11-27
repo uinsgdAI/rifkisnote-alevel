@@ -4,7 +4,6 @@ import {
   ArrowRight,
   BookOpen,
   CheckCircle2,
-  Columns2,
   Compass,
   ExternalLink,
   Eye,
@@ -21,7 +20,6 @@ import type {
   SubjectCode,
   SubtopicNote,
   SyllabusChapter,
-  TopicalPaperPack,
 } from '../types/syllabus';
 import {
   getAdjacentSubtopicsFromSyllabus,
@@ -31,8 +29,7 @@ import {
 import { KaTeXFormula, MathText } from './MathText';
 import { SyllabusSidebar } from './SyllabusSidebar';
 import { TopicSandbox } from './TopicSandbox';
-import { TransformationDiagrams } from './TransformationDiagrams';
-import { TopicIllustrations } from './TopicIllustrations';
+import { P1NoteDiagrams } from './P1NoteDiagrams';
 import { getKeyFindingsForNote, highlightImportantText } from '../utils/noteKeyFindings';
 import { getActiveSubjectVfxVariant, triggerSakugaBurst } from '../utils/sakugaVfx';
 
@@ -67,7 +64,6 @@ export const NotesView: React.FC<NotesViewProps> = ({
   const [showHint, setShowHint] = useState(false);
   const [showSolution, setShowSolution] = useState(false);
   const [revealedMarkSchemes, setRevealedMarkSchemes] = useState<number[]>([]);
-  const [matchingTopicalPacks, setMatchingTopicalPacks] = useState<TopicalPaperPack[]>([]);
 
   useEffect(() => {
     setQuickInput('');
@@ -76,27 +72,6 @@ export const NotesView: React.FC<NotesViewProps> = ({
     setShowSolution(false);
     setRevealedMarkSchemes([]);
   }, [topicId, subject]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const packsLoader =
-      subject === '0606'
-        ? import('../data/topicalPapers0606').then((m) => m.TOPICAL_PAPERS_0606)
-        : import('../data/topicalPapers0580').then((m) => m.TOPICAL_PAPERS_0580);
-
-    Promise.all([import('../utils/topicalPapers'), packsLoader])
-      .then(([{ findTopicalPapersForTopic }, packs]) => {
-        if (!cancelled) {
-          setMatchingTopicalPacks(findTopicalPapersForTopic(note.id, packs));
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setMatchingTopicalPacks([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [subject, note.id]);
 
   const chapter = syllabus.find((c) => c.id === chapterId);
   const isStudied = studiedTopicIds.includes(note.id);
@@ -153,14 +128,20 @@ export const NotesView: React.FC<NotesViewProps> = ({
       />
 
       <main className="flex-1 min-w-0 max-w-full w-full space-y-6">
+        {note.isLoaded === false ? (
+          <section className="p-8 sk-card flex items-center justify-center text-sm font-semibold text-[var(--sk-dim)]">
+            Loading Chapter {chapterId} Pure Mathematics 1 notes...
+          </section>
+        ) : (
+          <>
         {/* Topic Header Card */}
         <section className="p-6 sk-card space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--sk-dim)]">
-              <span>
-                {subject === '0606'
-                  ? 'IGCSE Additional Mathematics (0606)'
-                  : 'IGCSE Mathematics (0580)'}
+              <span>AS &amp; A Level Mathematics (9709)</span>
+              <span aria-hidden="true">·</span>
+              <span className="font-mono font-bold text-[var(--sk-pri-hover)]">
+                Paper 1 ({note.paperCode})
               </span>
               <span aria-hidden="true">·</span>
               <span>
@@ -168,10 +149,6 @@ export const NotesView: React.FC<NotesViewProps> = ({
               </span>
               <span aria-hidden="true">·</span>
               <span className="font-mono text-[var(--sk-ink)] font-semibold">{note.code}</span>
-              <span aria-hidden="true">·</span>
-              <span className={note.tier === 'Extended' ? 'text-[var(--sk-acc-ink)] font-semibold' : 'text-[var(--sk-body)]'}>
-                {subject === '0606' ? '0606 (Grades A*–E)' : note.tier}
-              </span>
             </div>
 
             <div className="flex items-center gap-2.5">
@@ -201,7 +178,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                 className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold sk-btn-primary cursor-pointer"
               >
                 <Play className="w-3.5 h-3.5" />
-                Practice {note.code}
+                Practice P1 {note.code}
               </button>
             </div>
           </div>
@@ -228,25 +205,6 @@ export const NotesView: React.FC<NotesViewProps> = ({
                     ))}
                   </ul>
                 </div>
-              )}
-              {note.coursebookRef && (
-                <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--sk-dim)]">
-                  <span className="font-semibold text-[var(--sk-ink)]">
-                    Cambridge IGCSE Coursebook
-                  </span>
-                  <span aria-hidden="true">·</span>
-                  <span>
-                    {note.coursebookRef.unitTitle}, Ch. {note.coursebookRef.chapter}:{' '}
-                    <MathText text={note.coursebookRef.chapterTitle} />
-                  </span>
-                  <span aria-hidden="true">·</span>
-                  <span>Sections {note.coursebookRef.sections}</span>
-                </div>
-              )}
-              {note.coursebookRef?.editionNote && (
-                <p className="mt-1 text-xs font-medium text-[var(--sk-acc-ink)]">
-                  <MathText text={note.coursebookRef.editionNote} />
-                </p>
               )}
             </div>
 
@@ -277,7 +235,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                 }}
                 className="px-3 py-1.5 text-xs font-semibold cursor-pointer whitespace-nowrap sk-tab"
               >
-                {subject === '0606' ? 'Detailed Syllabus' : 'Detailed Coursebook'}
+                Detailed P1 Notes
               </button>
             </div>
           </div>
@@ -366,11 +324,11 @@ export const NotesView: React.FC<NotesViewProps> = ({
               <div className="flex items-center gap-2">
                 <Zap className="w-4 h-4 text-[var(--sk-acc)] shrink-0" />
                 <h2 className="font-display text-base font-bold text-[var(--sk-ink)]">
-                  Key Findings &amp; Underlined Essentials (Temuan Kunci)
+                  Key Findings &amp; Underlined Essentials
                 </h2>
               </div>
               <span className="text-[11px] font-semibold text-[var(--sk-dim)]">
-                Underlined rules = must-state exam requirements
+                Underlined rules = must-state 9709 exam requirements
               </span>
             </div>
 
@@ -398,13 +356,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
           </section>
         )}
 
-        {/* Dedicated Graph-Paper Diagrams for 0580 7.1 Transformations */}
-        {subject === '0580' && note.id === '7.1' && <TransformationDiagrams />}
-
-        {/* Visual Notebook Diagrams for Bearings & Visual Syllabus Topics */}
-        {subject === '0580' && <TopicIllustrations topicId={note.id} />}
-
-        {/* Coursebook / Exam Margin Pedagogy: Tip & Fast Forward */}
+        {/* Exam Margin Pedagogy: Tip & Fast Forward */}
         {(note.coursebookTip || (studyMode === 'detailed' && note.fastForward)) && (
           <section
             aria-label="Exam Tip and Fast Forward"
@@ -417,9 +369,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
             {note.coursebookTip && (
               <div className="p-4 sm:p-5 rounded-[18px] bg-[var(--sk-acc-soft)] border-[1.5px] border-[var(--sk-acc-line)] space-y-1.5">
                 <div className="text-xs font-bold text-[var(--sk-acc-ink)]">
-                  {subject === '0606'
-                    ? 'Exam Tip · Additional Mathematics (0606)'
-                    : 'Coursebook Tip'}
+                  Exam Tip · 9709 Pure Mathematics 1
                 </div>
                 <p className="text-sm text-[var(--sk-body)] leading-relaxed">
                   <MathText text={note.coursebookTip} />
@@ -441,44 +391,22 @@ export const NotesView: React.FC<NotesViewProps> = ({
         )}
 
         {/* Syllabus Objectives (Detailed mode) */}
-        {studyMode === 'detailed' && (
+        {studyMode === 'detailed' && note.objectives.length > 0 && (
           <section className="p-6 sk-card space-y-4">
             <div className="flex items-center gap-2">
               <BookOpen className="w-4 h-4 text-[var(--sk-pri-hover)]" />
               <h2 className="font-display text-base font-bold text-[var(--sk-ink)]">
-                Curriculum Learning Objectives (2025–2027)
+                9709 P1 Syllabus Objectives
               </h2>
             </div>
 
-            <div className={`grid gap-6 ${note.extendedObjectives && note.extendedObjectives.length > 0 ? 'md:grid-cols-2' : 'grid-cols-1'}`}>
-              <div>
-                <h3 className="text-xs font-semibold text-[var(--sk-dim)] mb-2">
-                  {subject === '0606' ? '0606 Syllabus Objectives' : 'Core Curriculum'}
-                </h3>
-                <ul className="space-y-2 text-sm text-[var(--sk-body)] leading-relaxed list-disc pl-5">
-                  {note.coreObjectives.map((obj, idx) => (
-                    <li key={idx}>
-                      <MathText text={obj} />
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {subject !== '0606' && note.extendedObjectives && note.extendedObjectives.length > 0 && (
-                <div>
-                  <h3 className="text-xs font-semibold text-[var(--sk-acc-ink)] mb-2">
-                    Extended Supplement
-                  </h3>
-                  <ul className="space-y-2 text-sm text-[var(--sk-body)] leading-relaxed list-disc pl-5">
-                    {note.extendedObjectives.map((obj, idx) => (
-                      <li key={idx}>
-                        <MathText text={obj} />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
+            <ul className="space-y-2 text-sm text-[var(--sk-body)] leading-relaxed list-disc pl-5">
+              {note.objectives.map((obj, idx) => (
+                <li key={idx}>
+                  <MathText text={obj} />
+                </li>
+              ))}
+            </ul>
           </section>
         )}
 
@@ -508,6 +436,11 @@ export const NotesView: React.FC<NotesViewProps> = ({
             ))}
           </div>
         </section>
+
+        {/* Inline Visual Diagrams */}
+        {note.diagrams && note.diagrams.length > 0 && (
+          <P1NoteDiagrams diagrams={note.diagrams} />
+        )}
 
         {/* Step-by-Step Exam Method (Detailed mode) */}
         {studyMode === 'detailed' && note.stepByStepMethod && note.stepByStepMethod.length > 0 && (
@@ -579,7 +512,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
         )}
 
         {/* Interactive Sandbox if present */}
-        {subject === '0580' && note.sandbox && note.sandbox !== 'none' && (
+        {note.sandbox && note.sandbox !== 'none' && (
           <TopicSandbox type={note.sandbox} topicId={note.id} />
         )}
 
@@ -588,13 +521,11 @@ export const NotesView: React.FC<NotesViewProps> = ({
           <section className="p-6 sk-card space-y-6">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <h2 className="font-display text-base font-bold text-[var(--sk-ink)]">
-                {subject === '0606' ? 'Detailed 0606 Study Notes' : 'Detailed Coursebook Study Notes'}
+                Detailed 9709 Study Notes
               </h2>
-              {note.coursebookRef && (
-                <span className="text-xs text-[var(--sk-dim)]">
-                  Aligned with Chapter {note.coursebookRef.chapter}: <MathText text={note.coursebookRef.chapterTitle} />
-                </span>
-              )}
+              <span className="text-xs font-mono text-[var(--sk-dim)]">
+                Paper 1 · Pure Mathematics 1
+              </span>
             </div>
             <div className="space-y-6 divide-y divide-[var(--sk-line)]/70">
               {note.studyNotes.map((sec, idx) => (
@@ -772,18 +703,16 @@ export const NotesView: React.FC<NotesViewProps> = ({
                       </span>
                       <span aria-hidden="true">·</span>
                       <span>
-                        Paper {parsedPaper.paperNumber} ({parsedPaper.tier}) · {parsedPaper.sessionLabel}
+                        Paper {parsedPaper.paperNumber} ({parsedPaper.paperComponent}) · {parsedPaper.sessionLabel}
                       </span>
                     </>
                   ) : (
                     <>
                       <span className="font-mono font-semibold text-[var(--sk-ink)]">
-                        Syllabus {note.code}
+                        9709 Syllabus {note.code}
                       </span>
                       <span aria-hidden="true">·</span>
-                      <span>{subject === '0606' ? '0606 Add Maths' : note.tier}</span>
-                      <span aria-hidden="true">·</span>
-                      <span>{note.quickCheck.paperType ?? 'Non-Calculator'}</span>
+                      <span>{note.quickCheck.paperType ?? 'Pure Mathematics 1'}</span>
                     </>
                   )}
                   {typeof note.quickCheck.marks === 'number' && (
@@ -820,7 +749,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold sk-btn-subtle text-[var(--sk-pri-hover)] cursor-pointer shrink-0"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
-                  Browse {subject} Past Papers
+                  Browse 9709 Past Papers
                 </button>
               )}
             </div>
@@ -899,52 +828,6 @@ export const NotesView: React.FC<NotesViewProps> = ({
           </section>
         </div>
 
-        {/* Linked Topical Past Paper PDFs for Annotation */}
-        {matchingTopicalPacks.length > 0 && (
-          <section
-            aria-label="Topical Past Paper PDFs for this topic"
-            className="p-5 sk-card space-y-3"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <h2 className="font-display text-sm font-bold text-[var(--sk-ink)]">
-                  Annotatable Topical Past Paper Sheets for {note.code} {note.title}
-                </h2>
-                <p className="text-xs text-[var(--sk-dim)] mt-0.5">
-                  {subject === '0606'
-                    ? 'Solve real PapaCambridge 0606 topical past paper PDFs directly in the browser using Pen, Highlighter, and Ruler.'
-                    : 'Solve full exam-style topical PDFs side-by-side with worked solutions using Pen, Highlighter, and Ruler.'}
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2.5">
-              {matchingTopicalPacks.map((pack) => (
-                <button
-                  key={pack.id}
-                  type="button"
-                  onClick={(e) => {
-                    triggerSakugaBurst(e, getActiveSubjectVfxVariant('primary'));
-                    onNavigate({
-                      view: 'practice',
-                      subject,
-                      mode: 'topical-paper',
-                      topicalPackId: pack.id,
-                    });
-                  }}
-                  className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold sk-btn-secondary cursor-pointer"
-                >
-                  <Columns2 className="w-3.5 h-3.5 text-[var(--sk-pri-hover)]" />
-                  <span>{pack.title}</span>
-                  {subject === '0580' && (
-                    <span className="font-mono text-[11px] text-[var(--sk-dim)]">({pack.paperMode})</span>
-                  )}
-                  <ArrowRight className="w-3.5 h-3.5 text-[var(--sk-acc)]" />
-                </button>
-              ))}
-            </div>
-          </section>
-        )}
-
         {/* Bottom Prev / Next & Past Paper Quick Links */}
         <footer className="pt-2 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -976,7 +859,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
               className="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold sk-btn-subtle cursor-pointer"
             >
               <FileText className="w-3.5 h-3.5 text-[var(--sk-pri-hover)]" />
-              {subject} Past Papers
+              9709 Past Papers
             </button>
             {next && (
               <button
@@ -999,6 +882,8 @@ export const NotesView: React.FC<NotesViewProps> = ({
             )}
           </div>
         </footer>
+          </>
+        )}
       </main>
     </div>
   );

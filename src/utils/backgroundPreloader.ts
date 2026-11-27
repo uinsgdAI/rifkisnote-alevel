@@ -132,44 +132,16 @@ export function startBackgroundAppWarmup(options: {
       void fetch(assetUrl, { cache: 'force-cache' }).catch(() => undefined);
     }
 
-    // 3. Respect Data Saver and skip PDF prefetching when enabled or when no topic is active
+    // 3. Skip automatic PDF prefetching on 9709 (on-demand fetching + R2 mirror + caches.default only)
     if (isDataSaverEnabled() || !options.activeTopicId) {
       return;
     }
-
-    const activeSubject = options.activeSubject || '0580';
-    if (activeSubject !== '0580') {
-      return;
-    }
-
-    const activeTopicId = options.activeTopicId;
-
-    void import('../data/topicalPapers0580')
-      .then(async ({ TOPICAL_PAPERS_0580 }) => {
-        if (cancelled) return;
-        const queue = buildTopicalWarmupQueue(TOPICAL_PAPERS_0580, activeTopicId);
-        for (const item of queue) {
-          if (cancelled) return;
-          if (warmupPaused) {
-            await waitWhileBackgroundWarmupPaused();
-          }
-          if (hasActiveHighPriorityPdfFetch()) {
-            await waitForHighPriorityPdfFetches();
-          }
-          if (cancelled) return;
-          try {
-            const alreadyCached = await hasCachedPdfBytes(item.candidates);
-            if (!alreadyCached && !cancelled && !warmupPaused) {
-              await fetchPdfBytesWithFallback(item.candidates, {
-                priority: 'background',
-              });
-            }
-          } catch {
-            // ignore transient background prefetch errors silently
-          }
-        }
-      })
-      .catch(() => undefined);
+    void buildTopicalWarmupQueue;
+    void hasActiveHighPriorityPdfFetch;
+    void waitForHighPriorityPdfFetches;
+    void hasCachedPdfBytes;
+    void fetchPdfBytesWithFallback;
+    void waitWhileBackgroundWarmupPaused;
   }, 200);
 
   return () => {

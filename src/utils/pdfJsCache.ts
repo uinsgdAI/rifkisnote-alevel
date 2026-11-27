@@ -25,7 +25,7 @@ export function getSharedPdfWorker(): pdfjsLib.PDFWorker | null {
   try {
     if (!sharedPdfWorker || sharedPdfWorker.destroyed) {
       sharedPdfWorker = pdfjsLib.PDFWorker.create({
-        name: 'cambridge-0580-pdf-worker',
+        name: 'cambridge-9709-pdf-worker',
       });
     }
     return sharedPdfWorker;

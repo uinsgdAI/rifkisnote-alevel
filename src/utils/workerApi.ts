@@ -40,7 +40,7 @@ const PDF_CACHE_CONTROL = 'public, max-age=604800, stale-while-revalidate=86400'
 
 export function buildR2PdfObjectKey(parsed: URL): string {
   const cleanPath = parsed.pathname.startsWith('/') ? parsed.pathname : `/${parsed.pathname}`;
-  return `mirror/${parsed.hostname.toLowerCase()}${cleanPath}`;
+  return `alevel/mirror/${parsed.hostname.toLowerCase()}${cleanPath}`;
 }
 
 function getCloudflareEdgeCache(): Cache | null {
@@ -74,8 +74,7 @@ function jsonResponse(data: unknown, status = 200, cacheControl = 'no-store'): R
 }
 
 function parseValidatedSubjectParam(rawSubject: string | null): SubjectCode | null {
-  if (rawSubject === null || rawSubject === '') return '0580';
-  if (rawSubject === '0580' || rawSubject === '0606') return rawSubject;
+  if (rawSubject === null || rawSubject === '' || rawSubject === '9709') return '9709';
   return null;
 }
 
@@ -96,7 +95,7 @@ export async function handleApiRequest(
   }
 
   if (url.pathname === '/api/health') {
-    return jsonResponse({ ok: true, runtime: 'cloudflare-worker' }, 200, 'no-store');
+    return jsonResponse({ ok: true, runtime: 'cloudflare-worker', subject: '9709' }, 200, 'no-store');
   }
 
   const resolvedEdgeCacheOverride =
@@ -190,7 +189,7 @@ export async function handleApiRequest(
       }
     }
 
-    const safeFilename = (parsed.pathname.split('/').pop() || '0580.pdf').replace(
+    const safeFilename = (parsed.pathname.split('/').pop() || '9709.pdf').replace(
       /["\r\n\\]/g,
       '_'
     );

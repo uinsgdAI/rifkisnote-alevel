@@ -40,13 +40,7 @@ export function getActiveSubjectVfxVariant(
   role: 'primary' | 'accent' | 'emerald' = 'primary'
 ): SakugaVfxVariant {
   if (role === 'emerald') return 'emerald';
-  const is0606 =
-    typeof document !== 'undefined' &&
-    document.documentElement?.dataset?.subject === '0606';
-  if (is0606) {
-    return 'crimson';
-  }
-  return role === 'accent' ? 'blue' : 'blue';
+  return role === 'accent' ? 'indigo' : 'blue';
 }
 
 export function prefersReducedMotion(): boolean {

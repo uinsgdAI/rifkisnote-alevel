@@ -7,11 +7,11 @@ import {
   buildAppRoutePath,
   findSubtopicInSyllabus,
   parseAppRoute,
-  resolvePracticeSection,
   resolveRouteSubject,
 } from './utils/examLogic';
 import { startBackgroundAppWarmup, setBackgroundWarmupPaused } from './utils/backgroundPreloader';
 import {
+  loadChapterNotesForRoute,
   loadFormulaSheetModal,
   loadGraphCalculatorModal,
   loadNotesView,
@@ -27,15 +27,9 @@ const PracticeExamView = lazy(loadPracticeExamView);
 const FormulaSheetModal = lazy(loadFormulaSheetModal);
 const GraphCalculatorModal = lazy(loadGraphCalculatorModal);
 
-const STORAGE_KEYS: Record<SubjectCode, { studied: string; weak: string }> = {
-  '0580': {
-    studied: 'cambridge_0580_studied_topics_v1',
-    weak: 'cambridge_0580_weak_topics_v1',
-  },
-  '0606': {
-    studied: 'cambridge_0606_studied_topics_v1',
-    weak: 'cambridge_0606_weak_topics_v1',
-  },
+const STORAGE_KEYS = {
+  studied: 'cambridge_9709_studied_topics_v1',
+  weak: 'cambridge_9709_weak_topics_v1',
 };
 
 function readStoredTopicList(key: string): string[] {
@@ -56,14 +50,14 @@ function writeStoredTopicList(key: string, items: string[]): void {
   }
 }
 
-const ViewLoadingFallback: React.FC<{ subject: SubjectCode }> = ({ subject }) => (
+const ViewLoadingFallback: React.FC = () => (
   <main className="max-w-[1440px] mx-auto px-4 sm:px-6 py-8">
     <div
       role="status"
       aria-live="polite"
       className="p-8 sk-card flex items-center justify-center text-sm font-semibold text-[var(--sk-dim)]"
     >
-      Loading Cambridge IGCSE {subject} resources...
+      Loading Cambridge AS &amp; A Level Mathematics (9709) resources...
     </div>
   </main>
 );
@@ -72,11 +66,9 @@ export default function App() {
   const [route, setRoute] = useState<AppRoute>(() =>
     parseAppRoute(window.location.pathname, window.location.search)
   );
-  const activeSubject = resolveRouteSubject(route);
+  const activeSubject: SubjectCode = resolveRouteSubject(route);
 
-  const [syllabusBySubject, setSyllabusBySubject] = useState<
-    Partial<Record<SubjectCode, SyllabusChapter[]>>
-  >({});
+  const [syllabus, setSyllabus] = useState<SyllabusChapter[] | null>(null);
   const [formulaModalOpen, setFormulaModalOpen] = useState(false);
   const [graphModalOpen, setGraphModalOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -84,45 +76,63 @@ export default function App() {
   const [sakugaToast, setSakugaToast] = useState<string | null>(null);
   const toastTimerRef = useRef<number | null>(null);
 
-  const [studiedBySubject, setStudiedBySubject] = useState<Record<SubjectCode, string[]>>(() => ({
-    '0580': readStoredTopicList(STORAGE_KEYS['0580'].studied),
-    '0606': readStoredTopicList(STORAGE_KEYS['0606'].studied),
-  }));
-  const [weakBySubject, setWeakBySubject] = useState<Record<SubjectCode, string[]>>(() => ({
-    '0580': readStoredTopicList(STORAGE_KEYS['0580'].weak),
-    '0606': readStoredTopicList(STORAGE_KEYS['0606'].weak),
-  }));
+  const [studiedTopicIds, setStudiedTopicIds] = useState<string[]>(() =>
+    readStoredTopicList(STORAGE_KEYS.studied)
+  );
+  const [weakTopicIds, setWeakTopicIds] = useState<string[]>(() =>
+    readStoredTopicList(STORAGE_KEYS.weak)
+  );
 
-  const studiedTopicIds = studiedBySubject[activeSubject];
-  const weakTopicIds = weakBySubject[activeSubject];
-  const activeSyllabus = syllabusBySubject[activeSubject];
+  const loadedChaptersRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
-    if (syllabusBySubject[activeSubject]) return;
     let cancelled = false;
+    loadedChaptersRef.current = new Set();
     loadSubjectSyllabus(activeSubject)
       .then((chapters) => {
+        if (!cancelled) setSyllabus(chapters);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSubject]);
+
+  const activeNotesChapterId = route.view === 'notes' ? route.chapterId : null;
+
+  useEffect(() => {
+    if (!syllabus || activeNotesChapterId === null) return;
+    const validChapterId = syllabus.some((c) => c.id === activeNotesChapterId)
+      ? activeNotesChapterId
+      : 1;
+    if (loadedChaptersRef.current.has(validChapterId)) return;
+
+    let cancelled = false;
+    loadChapterNotesForRoute(validChapterId)
+      .then((loadedNotes) => {
         if (cancelled) return;
-        setSyllabusBySubject((prev) =>
-          prev[activeSubject] ? prev : { ...prev, [activeSubject]: chapters }
+        loadedChaptersRef.current.add(validChapterId);
+        setSyllabus((prev) =>
+          prev
+            ? prev.map((ch) =>
+                ch.id === validChapterId ? { ...ch, subtopics: loadedNotes } : ch
+              )
+            : prev
         );
       })
       .catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, [activeSubject, syllabusBySubject]);
+  }, [syllabus, activeNotesChapterId]);
 
   useLayoutEffect(() => {
     document.documentElement.dataset.subject = activeSubject;
   }, [activeSubject]);
 
   useEffect(() => {
-    document.title =
-      activeSubject === '0606'
-        ? "Rifki's Notes — Cambridge IGCSE Additional Mathematics (0606) | Study Notes, Practice & Past Papers"
-        : "Rifki's Notes — Cambridge IGCSE Mathematics (0580) | Study Notes, Mock Exams & Past Papers";
-  }, [activeSubject]);
+    document.title = "Rifki's Notes — Cambridge AS & A Level Mathematics (9709)";
+  }, []);
 
   useEffect(() => {
     setBackgroundWarmupPaused(route.view === 'past-papers');
@@ -171,86 +181,51 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
-  const handleSwitchSubject = useCallback(
-    (nextSubject: SubjectCode) => {
-      void loadSubjectSyllabus(nextSubject).catch(() => undefined);
-      if (route.view === 'past-papers') {
-        navigate({ view: 'past-papers', subject: nextSubject });
-      } else if (route.view === 'practice') {
-        const section = resolvePracticeSection(route.mode, route.topicalPackId);
-        navigate({ view: 'practice', subject: nextSubject, mode: section });
-      } else {
-        navigate({
-          view: 'notes',
-          subject: nextSubject,
-          chapterId: 1,
-          topicId: '1.1',
-        });
-      }
-    },
-    [route, navigate]
-  );
+  const flagWeakTopics = useCallback((topicIds: string[]) => {
+    if (topicIds.length === 0) return;
+    setWeakTopicIds((current) => {
+      const nextList = Array.from(new Set([...current, ...topicIds]));
+      writeStoredTopicList(STORAGE_KEYS.weak, nextList);
+      return nextList;
+    });
+  }, []);
 
-  const flagWeakTopics = useCallback(
-    (topicIds: string[]) => {
-      if (topicIds.length === 0) return;
-      const targetSubject = activeSubject;
-      setWeakBySubject((prev) => {
-        const current = prev[targetSubject];
-        const nextList = Array.from(new Set([...current, ...topicIds]));
-        writeStoredTopicList(STORAGE_KEYS[targetSubject].weak, nextList);
-        return { ...prev, [targetSubject]: nextList };
-      });
-    },
-    [activeSubject]
-  );
-
-  const clearWeakTopic = useCallback(
-    (topicId: string) => {
-      const targetSubject = activeSubject;
-      setWeakBySubject((prev) => {
-        const current = prev[targetSubject];
-        if (!current.includes(topicId)) return prev;
-        const nextList = current.filter((id) => id !== topicId);
-        writeStoredTopicList(STORAGE_KEYS[targetSubject].weak, nextList);
-        return { ...prev, [targetSubject]: nextList };
-      });
-    },
-    [activeSubject]
-  );
+  const clearWeakTopic = useCallback((topicId: string) => {
+    setWeakTopicIds((current) => {
+      if (!current.includes(topicId)) return current;
+      const nextList = current.filter((id) => id !== topicId);
+      writeStoredTopicList(STORAGE_KEYS.weak, nextList);
+      return nextList;
+    });
+  }, []);
 
   const toggleStudied = useCallback(
     (topicId: string) => {
-      const targetSubject = activeSubject;
-      const totalCount =
-        syllabusBySubject[targetSubject]?.flatMap((c) => c.subtopics).length ||
-        (targetSubject === '0606' ? 14 : 72);
-
-      setStudiedBySubject((prev) => {
-        const current = prev[targetSubject];
+      const totalCount = syllabus?.flatMap((c) => c.subtopics).length || 24;
+      setStudiedTopicIds((current) => {
         const willBeStudied = !current.includes(topicId);
         const nextList = willBeStudied
           ? [...current, topicId]
           : current.filter((id) => id !== topicId);
-        writeStoredTopicList(STORAGE_KEYS[targetSubject].studied, nextList);
+        writeStoredTopicList(STORAGE_KEYS.studied, nextList);
         if (willBeStudied) {
           clearWeakTopic(topicId);
           showToast(
-            `${targetSubject} Topic ${topicId} marked as studied (${nextList.length}/${totalCount})`
+            `9709 P1 Topic ${topicId} marked as studied (${nextList.length}/${totalCount})`
           );
         }
-        return { ...prev, [targetSubject]: nextList };
+        return nextList;
       });
     },
-    [activeSubject, syllabusBySubject, clearWeakTopic, showToast]
+    [syllabus, clearWeakTopic, showToast]
   );
 
-  const activeNote = activeSyllabus
+  const activeNote = syllabus
     ? (route.view === 'notes'
-        ? findSubtopicInSyllabus(activeSyllabus, route.chapterId, route.topicId)
+        ? findSubtopicInSyllabus(syllabus, route.chapterId, route.topicId)
         : undefined) ||
-      findSubtopicInSyllabus(activeSyllabus, 1, '1.1') ||
-      activeSyllabus[0]?.subtopics[0]
+      findSubtopicInSyllabus(syllabus, 1, '1.1') ||
+      syllabus[0]?.subtopics[0]
     : undefined;
 
   return (
@@ -258,18 +233,9 @@ export default function App() {
       <Header
         activeSubject={activeSubject}
         activeView={route.view}
-        activePracticeSection={
-          route.view === 'practice'
-            ? resolvePracticeSection(route.mode, route.topicalPackId)
-            : undefined
-        }
-        onSwitchSubject={handleSwitchSubject}
         onNavigate={navigate}
         onGoHome={() =>
-          navigate(
-            { view: 'notes', subject: activeSubject, chapterId: 1, topicId: '1.1' },
-            activeSubject === '0606' ? '/0606' : '/'
-          )
+          navigate({ view: 'notes', subject: activeSubject, chapterId: 1, topicId: '1.1' }, '/')
         }
         onOpenFormulaSheet={() => setFormulaModalOpen(true)}
         onOpenGraphTool={() => setGraphModalOpen(true)}
@@ -277,7 +243,7 @@ export default function App() {
           navigate({
             view: 'practice',
             subject: activeSubject,
-            mode: activeSubject === '0606' ? 'practice-test' : 'mock-extended',
+            mode: 'mock-p1-full',
           })
         }
         mobileMenuOpen={mobileMenuOpen}
@@ -285,14 +251,14 @@ export default function App() {
       />
 
       <div className="flex-1 w-full min-w-0">
-        {!activeSyllabus ? (
-          <ViewLoadingFallback subject={activeSubject} />
+        {!syllabus ? (
+          <ViewLoadingFallback />
         ) : (
-          <Suspense fallback={<ViewLoadingFallback subject={activeSubject} />}>
+          <Suspense fallback={<ViewLoadingFallback />}>
             {route.view === 'notes' && activeNote && (
               <NotesView
                 subject={activeSubject}
-                syllabus={activeSyllabus}
+                syllabus={syllabus}
                 chapterId={activeNote.chapterId}
                 topicId={activeNote.id}
                 note={activeNote}
@@ -307,7 +273,7 @@ export default function App() {
             {route.view === 'past-papers' && (
               <PastPapersView
                 subject={activeSubject}
-                syllabus={activeSyllabus}
+                syllabus={syllabus}
                 initialSessionSlug={route.sessionSlug}
                 initialPaperFilename={route.paperFilename}
                 weakTopicIds={weakTopicIds}
@@ -320,10 +286,9 @@ export default function App() {
             {route.view === 'practice' && (
               <PracticeExamView
                 subject={activeSubject}
-                syllabus={activeSyllabus}
+                syllabus={syllabus}
                 initialMode={route.mode}
                 initialTopicId={route.topicId}
-                initialTopicalPackId={route.topicalPackId}
                 navNonce={practiceNavNonce}
                 onOpenFormulaSheet={() => setFormulaModalOpen(true)}
                 onFlagWeakTopics={flagWeakTopics}
@@ -336,51 +301,50 @@ export default function App() {
 
       <footer className="border-t-[1.5px] border-[var(--sk-line)] bg-white mt-12">
         <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-5 flex flex-wrap items-center justify-between gap-4 text-xs text-[var(--sk-dim)]">
-          <div>
-            {activeSubject === '0606'
-              ? 'Cambridge IGCSE Additional Mathematics (0606) · 2025–2027 Syllabus · Free Study Notes, Practice & Past Papers'
-              : 'Cambridge IGCSE Mathematics (0580) · 2025–2027 Syllabus · Free Study Notes & Practice'}
+          <div className="space-y-1">
+            <div className="font-semibold text-[var(--sk-ink)]">
+              Cambridge AS &amp; A Level Mathematics (9709) · Pure Mathematics 1 (P1) Live · Full 9709 Past Papers Archive
+            </div>
+            <div className="flex flex-wrap items-center gap-3 text-[11px]">
+              <a href="https://rifkisnote.my.id" className="hover:text-[var(--sk-ink)] underline-offset-2 hover:underline">
+                Portal
+              </a>
+              <span aria-hidden="true">·</span>
+              <a href="https://igcse.rifkisnote.my.id" className="hover:text-[var(--sk-ink)] underline-offset-2 hover:underline">
+                IGCSE (0580 &amp; 0606)
+              </a>
+              <span aria-hidden="true">·</span>
+              <span className="font-semibold text-[var(--sk-pri-hover)]">A-Level (9709)</span>
+            </div>
           </div>
-          <div className="flex items-center gap-5">
-            {activeSubject === '0606' ? (
-              <button
-                type="button"
-                onClick={() =>
-                  navigate({
-                    view: 'notes',
-                    subject: '0606',
-                    chapterId: 14,
-                    topicId: '14.1',
-                  })
-                }
-                className="hover:text-[var(--sk-ink)] font-medium cursor-pointer"
-              >
-                14.1 Calculus
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() =>
-                  navigate({ view: 'notes', subject: '0580', chapterId: 1, topicId: '1.16' })
-                }
-                className="hover:text-[var(--sk-ink)] font-medium cursor-pointer"
-              >
-                1.16 Money
-              </button>
-            )}
+          <div className="flex flex-wrap items-center gap-5">
             <button
               type="button"
-              onClick={() => navigate({ view: 'past-papers', subject: activeSubject })}
+              onClick={() => navigate({ view: 'notes', subject: '9709', chapterId: 1, topicId: '1.1' })}
               className="hover:text-[var(--sk-ink)] font-medium cursor-pointer"
             >
-              PapaCambridge {activeSubject} Papers
+              1.1 Quadratics
             </button>
             <button
               type="button"
-              onClick={() => navigate({ view: 'practice', subject: activeSubject })}
+              onClick={() => navigate({ view: 'notes', subject: '9709', chapterId: 8, topicId: '8.2' })}
               className="hover:text-[var(--sk-ink)] font-medium cursor-pointer"
             >
-              Practice Exams
+              8.2 Integration
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate({ view: 'past-papers', subject: '9709' })}
+              className="hover:text-[var(--sk-ink)] font-medium cursor-pointer"
+            >
+              9709 Past Papers
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate({ view: 'practice', subject: '9709', mode: 'practice-test' })}
+              className="hover:text-[var(--sk-ink)] font-medium cursor-pointer"
+            >
+              P1 Practice
             </button>
           </div>
         </div>

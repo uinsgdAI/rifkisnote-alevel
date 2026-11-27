@@ -1,5 +1,6 @@
 import type {
   AppRoute,
+  PaperModuleCode,
   PastPaperFile,
   PracticeQuestion,
   SubjectCode,
@@ -8,12 +9,12 @@ import type {
 } from '../types/syllabus';
 
 export function normalizeSubjectCode(raw?: string | null): SubjectCode | null {
-  if (raw === '0580' || raw === '0606') return raw;
+  if (raw === '9709') return '9709';
   return null;
 }
 
-export function resolveRouteSubject(route: Pick<AppRoute, 'subject'>): SubjectCode {
-  return route.subject === '0606' ? '0606' : '0580';
+export function resolveRouteSubject(_route: Pick<AppRoute, 'subject'>): SubjectCode {
+  return '9709';
 }
 
 export function findSubtopicInSyllabus(
@@ -42,142 +43,105 @@ export function parseAppRoute(pathname: string, search = ''): AppRoute {
   const clean = pathname.replace(/\/+$/, '') || '/';
   const params = new URLSearchParams(search);
   const paperParam = params.get('paper') || undefined;
-  const packParam = params.get('pack') || undefined;
 
-  // Clean 0606 routes: /0606, /0606/notes/..., /0606/past-papers/..., /0606/practice/...
-  // Also accept /notes/0606/..., /past-papers/0606/..., /practice/0606/...
-  if (clean === '/0606' || clean === '/0606/notes' || clean === '/notes/0606') {
-    return { view: 'notes', subject: '0606', chapterId: 1, topicId: '1.1' };
+  if (clean === '/' || clean === '/notes' || clean === '/notes/9709' || clean === '/9709') {
+    return { view: 'notes', subject: '9709', chapterId: 1, topicId: '1.1' };
   }
 
-  const notes0606Match = clean.match(/^\/(?:0606\/notes|notes\/0606)\/(\d+)\/(\d+\.\d+)$/);
-  if (notes0606Match) {
-    return {
-      view: 'notes',
-      subject: '0606',
-      chapterId: Number(notes0606Match[1]),
-      topicId: notes0606Match[2],
-    };
-  }
-
-  const chapter0606OnlyMatch = clean.match(/^\/(?:0606\/notes|notes\/0606)\/(\d+)$/);
-  if (chapter0606OnlyMatch) {
-    const ch = Number(chapter0606OnlyMatch[1]);
-    return {
-      view: 'notes',
-      subject: '0606',
-      chapterId: ch,
-      topicId: `${ch}.1`,
-    };
-  }
-
-  if (clean === '/0606/past-papers' || clean.startsWith('/0606/past-papers/') || clean === '/past-papers/0606' || clean.startsWith('/past-papers/0606/')) {
-    const parts = clean.split('/').filter(Boolean);
-    const sessionSlug = parts[2] || undefined;
-    return {
-      view: 'past-papers',
-      subject: '0606',
-      sessionSlug,
-      paperFilename: paperParam,
-    };
-  }
-
-  if (clean === '/0606/practice' || clean.startsWith('/0606/practice/') || clean === '/practice/0606' || clean.startsWith('/practice/0606/')) {
-    const parts = clean.split('/').filter(Boolean);
-    return {
-      view: 'practice',
-      subject: '0606',
-      mode: parts[2] || undefined,
-      topicId: parts[3] || undefined,
-      ...(packParam ? { topicalPackId: packParam } : {}),
-    };
-  }
-
-  if (clean === '/' || clean === '/notes' || clean === '/notes/0580') {
-    return { view: 'notes', chapterId: 1, topicId: '1.1' };
-  }
-
-  const notesMatch = clean.match(/^\/notes\/0580\/(\d+)\/(\d+\.\d+)$/);
+  const notesMatch = clean.match(/^\/notes\/9709\/(\d+)\/(\d+\.\d+)$/);
   if (notesMatch) {
     return {
       view: 'notes',
+      subject: '9709',
       chapterId: Number(notesMatch[1]),
       topicId: notesMatch[2],
     };
   }
 
-  const chapterOnlyMatch = clean.match(/^\/notes\/0580\/(\d+)$/);
+  const chapterOnlyMatch = clean.match(/^\/notes\/9709\/(\d+)$/);
   if (chapterOnlyMatch) {
     const ch = Number(chapterOnlyMatch[1]);
     return {
       view: 'notes',
+      subject: '9709',
       chapterId: ch,
       topicId: `${ch}.1`,
     };
   }
 
-  if (clean.startsWith('/past-papers/0580')) {
+  if (clean === '/past-papers' || clean.startsWith('/past-papers/9709')) {
     const parts = clean.split('/').filter(Boolean);
     return {
       view: 'past-papers',
+      subject: '9709',
       sessionSlug: parts[2] || undefined,
       paperFilename: paperParam,
     };
   }
 
-  if (clean.startsWith('/practice/0580')) {
+  if (clean === '/practice' || clean.startsWith('/practice/9709')) {
     const parts = clean.split('/').filter(Boolean);
     return {
       view: 'practice',
+      subject: '9709',
       mode: parts[2] || undefined,
       topicId: parts[3] || undefined,
-      ...(packParam ? { topicalPackId: packParam } : {}),
     };
   }
 
-  return { view: 'notes', chapterId: 1, topicId: '1.1' };
+  return { view: 'notes', subject: '9709', chapterId: 1, topicId: '1.1' };
 }
 
 export function buildAppRoutePath(route: AppRoute): string {
-  const is0606 = route.subject === '0606';
-
   if (route.view === 'notes') {
-    return is0606
-      ? `/0606/notes/${route.chapterId}/${route.topicId}`
-      : `/notes/0580/${route.chapterId}/${route.topicId}`;
+    return `/notes/9709/${route.chapterId}/${route.topicId}`;
   }
   if (route.view === 'past-papers') {
-    const root = is0606 ? '/0606/past-papers' : '/past-papers/0580';
+    const root = '/past-papers/9709';
     const base = route.sessionSlug ? `${root}/${route.sessionSlug}` : root;
     return route.paperFilename
       ? `${base}?paper=${encodeURIComponent(route.paperFilename)}`
       : base;
   }
   if (route.view === 'practice') {
-    const root = is0606 ? '/0606/practice' : '/practice/0580';
-    let base = root;
+    const root = '/practice/9709';
     if (route.mode && route.topicId) {
-      base = `${root}/${route.mode}/${route.topicId}`;
-    } else if (route.mode) {
-      base = `${root}/${route.mode}`;
+      return `${root}/${route.mode}/${route.topicId}`;
     }
-    return route.topicalPackId
-      ? `${base}?pack=${encodeURIComponent(route.topicalPackId)}`
-      : base;
+    if (route.mode) {
+      return `${root}/${route.mode}`;
+    }
+    return root;
   }
-  return '/notes/0580/1/1.16';
+  return '/notes/9709/1/1.1';
 }
 
-export type PracticeSectionMode = 'practice-test' | 'topical-paper';
+export type PracticeSectionMode = 'practice-test';
 
 export function resolvePracticeSection(
-  mode?: string,
-  topicalPackId?: string
+  _mode?: string,
+  _topicalPackId?: string
 ): PracticeSectionMode {
-  if (topicalPackId || mode === 'topical-paper') {
-    return 'topical-paper';
-  }
   return 'practice-test';
+}
+
+export function mapPaperNumberToModule(paperNumber: string): PaperModuleCode | 'All' {
+  switch (paperNumber) {
+    case '1':
+      return 'P1';
+    case '2':
+      return 'P2';
+    case '3':
+      return 'P3';
+    case '4':
+      return 'M1';
+    case '5':
+      return 'S1';
+    case '6':
+      return 'S2';
+    default:
+      return 'All';
+  }
 }
 
 export interface ParsedPaperReference {
@@ -186,13 +150,13 @@ export interface ParsedPaperReference {
   sessionLabel: string;
   paperNumber: string;
   variant: string;
-  tier: 'Core' | 'Extended';
+  paperComponent: PaperModuleCode | 'All';
   qpFilename: string;
   msFilename: string;
 }
 
 export function parsePaperReference(rawCode: string): ParsedPaperReference | null {
-  const match = rawCode.match(/0580\/([1-4])([1-3])\/(M\/J|O\/N|F\/M)\/(\d{2})/i);
+  const match = rawCode.match(/9709\/([1-6])([1-5])\/(M\/J|O\/N|F\/M)\/(\d{2})/i);
   if (!match) return null;
 
   const paperNumber = match[1];
@@ -215,18 +179,15 @@ export function parsePaperReference(rawCode: string): ParsedPaperReference | nul
     seriesLabel = 'Feb / March';
   }
 
-  const tier: 'Core' | 'Extended' =
-    paperNumber === '1' || paperNumber === '3' ? 'Core' : 'Extended';
-
   return {
-    paperCode: `0580/${paperNumber}${variant}/${seriesToken}/${yy}`,
+    paperCode: `9709/${paperNumber}${variant}/${seriesToken}/${yy}`,
     sessionSlug: `${fullYear}-${seriesSlug}`,
     sessionLabel: `${seriesLabel} ${fullYear}`,
     paperNumber,
     variant,
-    tier,
-    qpFilename: `0580_${seriesCode}${yy}_qp_${paperNumber}${variant}.pdf`,
-    msFilename: `0580_${seriesCode}${yy}_ms_${paperNumber}${variant}.pdf`,
+    paperComponent: mapPaperNumberToModule(paperNumber),
+    qpFilename: `9709_${seriesCode}${yy}_qp_${paperNumber}${variant}.pdf`,
+    msFilename: `9709_${seriesCode}${yy}_ms_${paperNumber}${variant}.pdf`,
   };
 }
 
@@ -235,11 +196,10 @@ export function normalizeAnswerString(raw: string): string {
     .trim()
     .toLowerCase()
     .replace(/[$£€¥₹\s]/g, '')
-    .replace(/^(x|y|n|p|k|r)=/i, '')
-    .replace(/°|deg|degrees/gi, '')
+    .replace(/^(x|y|n|p|k|r|a|b|c)=/i, '')
+    .replace(/°|deg|degrees|rad|radians/gi, '')
     .replace(/%$/, '');
 
-  // Support decimal comma for short decimal inputs like "88,2" or "88,25", while stripping thousands commas like "117,000"
   const withDecimal = /^-?\d+,\d{1,2}$/.test(trimmed)
     ? trimmed.replace(',', '.')
     : trimmed.replace(/,/g, '');
@@ -251,7 +211,6 @@ export function parseNumericOrFraction(raw: string): number | null {
   const cleaned = normalizeAnswerString(raw);
   if (!cleaned) return null;
 
-  // Mixed fraction e.g. "1 1/2" was stripped of spaces, handle "a/b"
   const fracMatch = cleaned.match(/^(-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)$/);
   if (fracMatch) {
     const num = Number(fracMatch[1]);
@@ -321,7 +280,6 @@ export function gradeStudentAnswer(
         return { isCorrect: true, isPartial: false, marksEarned: maxMarks, maxMarks };
       }
 
-      // Allow Cambridge 3 s.f. / decimal rounding tolerance when question isn't strictly integer-locked (tolerance === 0)
       if (baseTol > 0) {
         const strictTwoDpPrompt =
           /nearest\s+cent|2\s*\$?\s*d\.?p\.?|to\s+\$?2\$?\s*decimal\s+places/i.test(
@@ -351,7 +309,7 @@ export function gradeStudentAnswer(
               isPartial: false,
               marksEarned: maxMarks,
               maxMarks,
-              matchReason: 'Accepted within Cambridge rounding / 3 s.f. tolerance',
+              matchReason: 'Accepted within Cambridge 3 s.f. rounding tolerance',
             };
           }
           if (maxMarks >= 2) {
@@ -365,7 +323,6 @@ export function gradeStudentAnswer(
           }
         }
 
-        // Near-miss intermediate rounding band on multi-mark calculations earns partial method credit
         const partialBand = Math.max(baseTol * 10, Math.abs(target) * 0.015, 0.25);
         if (maxMarks >= 2 && diff <= partialBand) {
           return {
@@ -402,42 +359,22 @@ export interface GradeEstimate {
 export function estimateCambridgeGrade(
   earnedMarks: number,
   totalMarks: number,
-  tier: 'Core' | 'Extended',
-  subject: SubjectCode = '0580'
+  level: 'AS' | 'ALevel' = 'AS'
 ): GradeEstimate {
   if (totalMarks <= 0) {
     return { grade: 'U', percentage: 0, descriptor: 'Unclassified' };
   }
   const percentage = Math.round((earnedMarks / totalMarks) * 100);
 
-  if (subject === '0606') {
-    // Cambridge 0606 awards grades A* to E (or U); grades F and G are not available.
-    if (percentage >= 85) return { grade: 'A*', percentage, descriptor: 'Distinction (0606 Additional Maths)' };
-    if (percentage >= 73) return { grade: 'A', percentage, descriptor: 'High Merit (0606)' };
-    if (percentage >= 60) return { grade: 'B', percentage, descriptor: 'Merit (0606)' };
-    if (percentage >= 47) return { grade: 'C', percentage, descriptor: 'Credit Pass (0606)' };
-    if (percentage >= 35) return { grade: 'D', percentage, descriptor: 'Pass (0606)' };
-    if (percentage >= 24) return { grade: 'E', percentage, descriptor: 'Minimum Pass (0606)' };
-    return { grade: 'U', percentage, descriptor: 'Unclassified (Below Grade E)' };
+  if (level === 'ALevel' && percentage >= 88) {
+    return { grade: 'A*', percentage, descriptor: 'Distinction (9709 A-Level)' };
   }
-
-  if (tier === 'Extended') {
-    if (percentage >= 86) return { grade: 'A*', percentage, descriptor: 'Distinction (Top Extended)' };
-    if (percentage >= 73) return { grade: 'A', percentage, descriptor: 'High Merit' };
-    if (percentage >= 60) return { grade: 'B', percentage, descriptor: 'Merit' };
-    if (percentage >= 46) return { grade: 'C', percentage, descriptor: 'Credit Pass' };
-    if (percentage >= 34) return { grade: 'D', percentage, descriptor: 'Pass' };
-    if (percentage >= 22) return { grade: 'E', percentage, descriptor: 'Borderline Extended' };
-    return { grade: 'U', percentage, descriptor: 'Below Threshold' };
-  }
-
-  // Core tier max grade is C
-  if (percentage >= 72) return { grade: 'C', percentage, descriptor: 'Maximum Core Grade' };
-  if (percentage >= 58) return { grade: 'D', percentage, descriptor: 'Solid Core Pass' };
-  if (percentage >= 44) return { grade: 'E', percentage, descriptor: 'Core Pass' };
-  if (percentage >= 31) return { grade: 'F', percentage, descriptor: 'Foundation Pass' };
-  if (percentage >= 20) return { grade: 'G', percentage, descriptor: 'Minimum Grade' };
-  return { grade: 'U', percentage, descriptor: 'Below Threshold' };
+  if (percentage >= 75) return { grade: 'A', percentage, descriptor: 'Distinction / High Merit (9709 P1)' };
+  if (percentage >= 63) return { grade: 'B', percentage, descriptor: 'Merit (9709 P1)' };
+  if (percentage >= 51) return { grade: 'C', percentage, descriptor: 'Credit Pass (9709 P1)' };
+  if (percentage >= 40) return { grade: 'D', percentage, descriptor: 'Pass (9709 P1)' };
+  if (percentage >= 29) return { grade: 'E', percentage, descriptor: 'Minimum Pass (9709 P1)' };
+  return { grade: 'U', percentage, descriptor: 'Unclassified (Below Grade E)' };
 }
 
 export function parsePapaCambridgeFilename(
@@ -469,16 +406,7 @@ export function parsePapaCambridgeFilename(
   const paperMatch = lower.match(/_(?:qp|ms|in)_(\d)(\d)?\.pdf$/);
   const paperNumber = paperMatch ? paperMatch[1] : '-';
   const variant = paperMatch && paperMatch[2] ? paperMatch[2] : '-';
-
-  const is0606 = lower.startsWith('0606');
-  let tier: PastPaperFile['tier'] = 'All';
-  if (!is0606) {
-    if (paperNumber === '1' || paperNumber === '3') {
-      tier = 'Core';
-    } else if (paperNumber === '2' || paperNumber === '4') {
-      tier = 'Extended';
-    }
-  }
+  const paperComponent = mapPaperNumberToModule(paperNumber);
 
   return {
     filename,
@@ -486,7 +414,7 @@ export function parsePapaCambridgeFilename(
     docTypeLabel,
     paperNumber,
     variant,
-    tier,
+    paperComponent,
     url,
     sessionSlug,
   };
@@ -568,79 +496,59 @@ export interface TopicSearchMatch {
 
 const DOMAIN_TOPIC_HINTS: Array<{ keywords: string[]; topicIds: string[]; reason: string }> = [
   {
-    keywords: ['polygon', 'polygons', 'interior', 'exterior', 'pentagon', 'hexagon', 'octagon', 'decagon', 'quadrilateral', 'parallel', 'angle', 'angles'],
-    topicIds: ['4.6', '4.1'],
-    reason: 'Polygon & angle rules',
+    keywords: ['quadratic', 'quadratics', 'completing', 'vertex', 'turning', 'minimum', 'maximum'],
+    topicIds: ['1.1', '1.2', '1.3'],
+    reason: 'Quadratics & vertex form',
   },
   {
-    keywords: ['statistic', 'statistics', 'stats', 'data', 'average', 'averages', 'mean', 'median', 'mode', 'range'],
-    topicIds: ['9.3', '9.2', '9.1', '9.4', '9.5', '9.6', '9.7'],
-    reason: 'Statistics curriculum',
+    keywords: ['discriminant', 'roots', 'real', 'distinct', 'equal', 'tangent'],
+    topicIds: ['1.2', '1.4', '3.3'],
+    reason: 'Discriminant & intersections',
   },
   {
-    keywords: ['histogram', 'histograms', 'frequency density', 'unequal'],
-    topicIds: ['9.7'],
-    reason: 'Histograms & frequency density',
+    keywords: ['inequality', 'inequalities', 'disguised', 'substitution', 'simultaneous'],
+    topicIds: ['1.3', '1.4'],
+    reason: 'Quadratic inequalities & simultaneous equations',
   },
   {
-    keywords: ['cumulative', 'quartile', 'quartiles', 'iqr', 'interquartile', 'percentile', 'ogive'],
-    topicIds: ['9.6'],
-    reason: 'Cumulative frequency & IQR',
+    keywords: ['function', 'functions', 'domain', 'range', 'composite', 'inverse', 'one-one'],
+    topicIds: ['2.1', '2.2', '2.3'],
+    reason: 'Functions, composite & inverse',
   },
   {
-    keywords: ['scatter', 'correlation', 'best fit', 'pie', 'stem', 'leaf'],
-    topicIds: ['9.5', '9.4'],
-    reason: 'Charts & scatter graphs',
+    keywords: ['coordinate', 'midpoint', 'gradient', 'perpendicular', 'parallel', 'circle', 'centre', 'radius'],
+    topicIds: ['3.1', '3.2', '3.3'],
+    reason: 'Coordinate geometry & circles',
   },
   {
-    keywords: ['circle', 'theorem', 'theorems', 'tangent', 'cyclic', 'chord', 'segment', 'semicircle'],
-    topicIds: ['4.8', '4.7'],
-    reason: 'Circle theorems',
+    keywords: ['radian', 'radians', 'circular', 'arc', 'sector', 'segment', 'perimeter'],
+    topicIds: ['4.1', '4.2'],
+    reason: 'Circular measure',
   },
   {
-    keywords: ['bearing', 'bearings', 'north', 'scale'],
-    topicIds: ['4.3'],
-    reason: 'Three-figure bearings',
+    keywords: ['trig', 'trigonometry', 'sin', 'cos', 'tan', 'identity', 'identities', 'quadrant', 'astc'],
+    topicIds: ['5.1', '5.2', '5.3'],
+    reason: 'Trigonometry & identities',
   },
   {
-    keywords: ['similar', 'similarity', 'congruent', 'congruence', 'scale factor'],
-    topicIds: ['4.4', '4.1'],
-    reason: 'Similarity & congruence',
+    keywords: ['binomial', 'expansion', 'pascal', 'coefficient', 'term', 'series'],
+    topicIds: ['6.1', '6.2', '6.3'],
+    reason: 'Binomial & progressions',
   },
   {
-    keywords: ['trig', 'trigonometry', 'sin', 'cos', 'tan', 'sine', 'cosine', 'sohcahtoa', 'pythagoras', 'elevation', 'depression'],
-    topicIds: ['6.2', '6.5', '6.1', '6.3', '6.4', '6.6'],
-    reason: 'Trigonometry & Pythagoras',
+    keywords: ['arithmetic', 'geometric', 'progression', 'common', 'difference', 'ratio', 'infinity'],
+    topicIds: ['6.2', '6.3'],
+    reason: 'AP & GP series',
   },
   {
-    keywords: ['vector', 'vectors', 'magnitude', 'column'],
-    topicIds: ['7.3', '7.2', '7.4', '7.1'],
-    reason: 'Vectors & transformations',
+    keywords: ['differentiate', 'differentiation', 'derivative', 'chain', 'normal', 'stationary', 'increasing', 'decreasing', 'rate'],
+    topicIds: ['7.1', '7.2', '7.3'],
+    reason: 'Differentiation & applications',
   },
   {
-    keywords: ['probability', 'tree', 'conditional', 'combined', 'venn', 'mutually'],
-    topicIds: ['8.3', '8.4', '8.1', '8.2', '1.2'],
-    reason: 'Probability & sets',
-  },
-  {
-    keywords: ['money', 'currency', 'exchange', 'commission', 'compound', 'interest', 'depreciation', 'reverse percentage', 'percentage'],
-    topicIds: ['1.16', '1.17', '1.13'],
-    reason: 'Money & percentages',
-  },
-  {
-    keywords: ['surd', 'surds', 'rationalise', 'bounds', 'upper bound', 'lower bound', 'accuracy', 'indices', 'standard form'],
-    topicIds: ['1.18', '1.10', '1.7', '1.8'],
-    reason: 'Number & accuracy',
-  },
-  {
-    keywords: ['quadratic', 'simultaneous', 'factorise', 'inequality', 'gradient', 'perpendicular', 'differentiation', 'turning point', 'sequence', 'function', 'inverse'],
-    topicIds: ['2.5', '2.12', '2.13', '2.7', '2.8', '3.7', '3.4'],
-    reason: 'Algebra & coordinate geometry',
-  },
-  {
-    keywords: ['area', 'volume', 'surface', 'cylinder', 'cone', 'sphere', 'sector', 'arc', 'prism', 'mensuration'],
-    topicIds: ['5.4', '5.3', '5.2', '5.5'],
-    reason: 'Mensuration formulae',
+    keywords: ['integrate', 'integration', 'integral', 'area', 'volume', 'revolution', 'improper'],
+    topicIds: ['8.1', '8.2', '8.3'],
+    reason: 'Integration & volumes of revolution',
   },
 ];
 
@@ -671,12 +579,7 @@ export function findMatchingSyllabusTopics(
 
       const titleLower = topic.title.toLowerCase();
       const summaryLower = topic.summary.toLowerCase();
-      const objectivesText = [
-        ...topic.coreObjectives,
-        ...(topic.extendedObjectives || []),
-      ]
-        .join(' ')
-        .toLowerCase();
+      const objectivesText = topic.objectives.join(' ').toLowerCase();
       const notesText = topic.studyNotes
         .map((s) => `${s.heading} ${s.body} ${(s.bullets || []).join(' ')}`)
         .join(' ')
@@ -696,7 +599,7 @@ export function findMatchingSyllabusTopics(
         }
         if (titleLower.includes(token) || titleLower.includes(stem)) {
           score += 40;
-          matchReason ||= `Topic title`;
+          matchReason ||= 'Topic title';
         }
         if (chTitleLower.includes(token) || chTitleLower.includes(stem)) {
           score += 24;
@@ -704,15 +607,15 @@ export function findMatchingSyllabusTopics(
         }
         if (summaryLower.includes(token) || summaryLower.includes(stem)) {
           score += 18;
-          matchReason ||= `Syllabus summary`;
+          matchReason ||= 'Syllabus summary';
         }
         if (objectivesText.includes(token) || objectivesText.includes(stem)) {
           score += 12;
-          matchReason ||= `Curriculum objective`;
+          matchReason ||= 'Curriculum objective';
         }
         if (notesText.includes(token) || notesText.includes(stem) || chDescLower.includes(stem)) {
           score += 6;
-          matchReason ||= `Study notes`;
+          matchReason ||= 'Study notes';
         }
       }
 
@@ -749,4 +652,3 @@ export function findMatchingSyllabusTopics(
     })
     .slice(0, limit);
 }
-

@@ -67,7 +67,7 @@ export async function onRequestGet(context: {
       );
     }
 
-    const filename = parsed.pathname.split('/').pop() || '0580.pdf';
+    const filename = parsed.pathname.split('/').pop() || '9709.pdf';
 
     const response = new Response(buf, {
       status: 200,

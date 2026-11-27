@@ -11,7 +11,7 @@ export async function onRequestGet(context: { request: Request }): Promise<Respo
     });
   }
 
-  const result = await fetchPapaCambridgePapers(session);
+  const result = await fetchPapaCambridgePapers(session, '9709');
   return new Response(JSON.stringify(result), {
     headers: {
       'Content-Type': 'application/json; charset=utf-8',

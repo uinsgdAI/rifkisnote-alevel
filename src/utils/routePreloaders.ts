@@ -25,13 +25,14 @@ export const loadGraphCalculatorModal = () =>
     default: m.GraphCalculatorModal,
   }));
 
-export async function loadSubjectSyllabus(subject: SubjectCode): Promise<SyllabusChapter[]> {
-  if (subject === '0606') {
-    const mod = await import('../data/syllabus0606');
-    return mod.SYLLABUS_0606;
-  }
-  const mod = await import('../data/syllabus0580');
-  return mod.SYLLABUS_0580;
+export async function loadSubjectSyllabus(_subject?: SubjectCode): Promise<SyllabusChapter[]> {
+  const mod = await import('../data/syllabus9709');
+  return mod.createSyllabusShell9709();
+}
+
+export async function loadChapterNotesForRoute(chapterId: number) {
+  const mod = await import('../data/syllabus9709');
+  return mod.loadP1ChapterNotes(chapterId);
 }
 
 let preloadedAll = false;
